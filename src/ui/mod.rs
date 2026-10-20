@@ -69,22 +69,20 @@ pub fn header(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
 
     // Second line keeps the (often long) target URL and the last socket error
     // out of the action row, where they used to overlap the buttons.
-    if app.conn.state() != ConnState::Connected || app.conn.last_error.is_some() {
-        ui.horizontal(|ui| {
-            ui.add_space(2.0);
-            ui.label(
-                RichText::new(app.conn.url())
-                    .color(theme::MUTED)
-                    .small()
-                    .monospace(),
-            );
-            if let Some(error) = &app.conn.last_error {
-                ui.add(
-                    egui::Label::new(RichText::new(error).color(theme::ERROR).small()).truncate(),
-                );
-            }
-        });
-    }
+    // Always render the URL row: hiding it while connected made the whole
+    // page jump by ~25px every time the socket came up or dropped.
+    ui.horizontal(|ui| {
+        ui.add_space(2.0);
+        ui.label(
+            RichText::new(app.conn.url())
+                .color(theme::MUTED)
+                .small()
+                .monospace(),
+        );
+        if let Some(error) = &app.conn.last_error {
+            ui.add(egui::Label::new(RichText::new(error).color(theme::ERROR).small()).truncate());
+        }
+    });
 
     if !app.toasts.is_empty() {
         ui.add_space(2.0);
@@ -144,6 +142,75 @@ pub fn status_badge(ui: &mut egui::Ui, text: &str, color: egui::Color32) {
         .rect_filled(rect, size.y / 2.0, color.gamma_multiply(0.16));
     ui.painter()
         .galley(rect.min + egui::vec2(10.0, 4.0), galley, color);
+}
+
+/// Start/stop button shared by the dashboard and the server page. Requests are
+/// queued to the supervisor thread, so this never blocks the frame.
+pub fn server_controls(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
+    use crate::server::State;
+
+    let state = app.server.state();
+    let busy = matches!(state, State::Starting | State::Stopping);
+    let running = matches!(state, State::Running(_));
+
+    if running {
+        let button = ui.add_enabled(
+            !busy,
+            theme::outlined_button("サーバーを停止").text_color(theme::WARN),
+        );
+        if button.clicked() {
+            app.stop_server();
+        }
+    } else {
+        let button = ui.add_enabled(!busy, theme::primary_button("サーバーを起動"));
+        if button.clicked() {
+            app.start_server();
+        }
+    }
+
+    if busy {
+        ui.spinner();
+    }
+}
+
+/// Compact server summary used on the dashboard: state, PID, controls and a
+/// link to the full server page.
+pub fn server_summary(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
+    ui.horizontal(|ui| {
+        server_status_line(ui, app);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui.add(theme::text_button("サーバー設定へ")).clicked() {
+                app.page = crate::app::Page::Server;
+            }
+        });
+    });
+
+    ui.horizontal(|ui| {
+        server_controls(ui, app);
+        if !app.server.is_running()
+            && (app.server.jar.is_none() || app.server.java.is_none())
+            && ui.add(theme::text_button("jar / Java を入手")).clicked()
+        {
+            app.page = crate::app::Page::Server;
+        }
+    });
+}
+
+/// Badge plus PID/error text, shared by both server surfaces.
+pub fn server_status_line(ui: &mut egui::Ui, app: &SlimeVrApp) {
+    use crate::server::State;
+
+    let (label, color) = match app.server.state() {
+        State::Running(_) => ("実行中", theme::OK),
+        State::Starting => ("起動中…", theme::WARN),
+        State::Stopping => ("停止処理中…", theme::WARN),
+        State::Stopped => ("停止中", theme::MUTED),
+    };
+    status_badge(ui, label, color);
+    let status = app.server.status_text();
+    if !status.is_empty() {
+        ui.label(RichText::new(status).small().color(theme::MUTED));
+    }
 }
 
 pub fn nav(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
@@ -289,13 +356,8 @@ pub fn two_columns(ui: &egui::Ui) -> bool {
 
 pub fn section<R>(ui: &mut egui::Ui, title: &str, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     theme::card(ui, |ui| {
-        ui.horizontal(|ui| {
-            ui.label(RichText::new(title).strong().size(15.0));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label("");
-            });
-        });
-        ui.add_space(4.0);
+        ui.label(RichText::new(title).strong().size(16.0));
+        ui.add_space(8.0);
         add(ui)
     })
 }

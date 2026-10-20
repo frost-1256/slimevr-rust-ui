@@ -30,6 +30,15 @@ render without any system CJK or icon fonts.
   start/stop the Java server from the UI (jar + Java auto-detection or explicit
   paths), one-click download of `slimevr.jar` (latest GitHub release) and of an
   Adoptium JRE 17 into the per-user data directory, server log.
+- The dashboard starts with a server card (state, PID, start/stop), the same
+  controls live on the server page.
+
+Starting and stopping run on a supervisor thread: the button queues a request
+and the frame loop only drains events, so the UI stays responsive while the JVM
+boots or shuts down (`Stopped → Starting → Running → Stopping`). On Windows the
+JVM is spawned with `CREATE_NO_WINDOW`, so no console window appears. A panic
+writes a backtrace to `<data dir>/slimevr-native-ui/crash.log` in addition to
+stderr.
 
 ## Run
 

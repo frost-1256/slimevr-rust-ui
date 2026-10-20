@@ -258,21 +258,8 @@ fn steamvr_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
 fn process_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
     let mut frames: Vec<Vec<u8>> = Vec::new();
     ui::section(ui, "サーバープロセス", |ui| {
-        let running = app.server.is_running();
-        ui.horizontal(|ui| {
-            ui.label(
-                RichText::new(if running { "実行中" } else { "停止" }).color(if running {
-                    theme::OK
-                } else {
-                    theme::MUTED
-                }),
-            );
-            ui.label(
-                RichText::new(app.server.status_text())
-                    .small()
-                    .color(theme::MUTED),
-            );
-        });
+        ui::server_status_line(ui, app);
+        ui.add_space(6.0);
         ui.label(
             RichText::new(format!("jar: {}", app.server.jar_display()))
                 .monospace()
@@ -322,19 +309,7 @@ fn process_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
 
         ui.add_space(6.0);
         ui.horizontal(|ui| {
-            if running {
-                if ui
-                    .add(theme::outlined_button("サーバーを停止").text_color(theme::WARN))
-                    .clicked()
-                {
-                    app.server.stop();
-                }
-            } else if ui.add(theme::primary_button("サーバーを起動")).clicked() {
-                match app.server.start() {
-                    Ok(()) => app.toast(crate::app::Severity::Info, "サーバーを起動しました"),
-                    Err(error) => app.toast(crate::app::Severity::Error, error),
-                }
-            }
+            ui::server_controls(ui, app);
             if ui.add(theme::text_button("設定ファイルを開く")).clicked()
                 && let Some(path) = config::server_config_path(app.config.server_dir.as_deref())
                 && let Some(parent) = path.parent()

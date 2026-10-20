@@ -7,6 +7,24 @@ use crate::ui;
 
 pub fn show(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
     egui::ScrollArea::vertical().show(ui, |ui| {
+        // The most common first action: bring the server up. Keep it at the
+        // very top instead of hiding it behind the server page.
+        ui::section(ui, "サーバー", |ui| {
+            ui::server_summary(ui, app);
+            ui.add_space(4.0);
+            ui.label(
+                RichText::new(format!(
+                    "jar: {}   java: {}",
+                    app.server.jar_display(),
+                    app.server.java_display()
+                ))
+                .monospace()
+                .small()
+                .color(theme::MUTED),
+            );
+        });
+        ui.add_space(12.0);
+
         if !crate::app::connected(app) {
             theme::card(ui, |ui| {
                 ui.label(

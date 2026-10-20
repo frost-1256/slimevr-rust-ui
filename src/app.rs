@@ -306,7 +306,39 @@ impl SlimeVrApp {
         self.send_frame(crate::proto::settings_request(), "設定取得");
     }
 
+    /// Queue a server start; only missing files fail synchronously, everything
+    /// else (port, Java version, spawn) is reported by `poll_server`.
+    pub fn start_server(&mut self) {
+        if let Err(error) = self.server.start() {
+            self.toast(Severity::Error, error);
+        }
+    }
+
+    pub fn stop_server(&mut self) {
+        self.server.stop();
+    }
+
     // -- events ------------------------------------------------------------
+
+    /// Fold supervisor events into toasts; the supervisor itself never blocks.
+    fn poll_server(&mut self) {
+        use crate::server::State;
+        let before = self.server.state();
+        let before_error = self.server.last_error.clone();
+        self.server.poll();
+        let after = self.server.state();
+        if matches!(after, State::Running(_)) && !matches!(before, State::Running(_)) {
+            self.toast(Severity::Info, "サーバーを起動しました");
+        }
+        if after == State::Stopped && matches!(before, State::Running(_) | State::Stopping) {
+            self.toast(Severity::Info, "サーバーを停止しました");
+        }
+        if self.server.last_error != before_error
+            && let Some(error) = self.server.last_error.clone()
+        {
+            self.toast(Severity::Error, format!("サーバー: {error}"));
+        }
+    }
 
     /// Fold finished downloads into the server panel: re-detect the paths so a
     /// freshly downloaded jar/JRE is used without restarting the app.
@@ -568,9 +600,17 @@ impl eframe::App for SlimeVrApp {
         self.frame_times.push(now);
 
         let previous_scale = self.ui_scale;
-        ctx.set_pixels_per_point(self.ui_scale);
+        // Zoom multiplies the native DPI instead of replacing it; setting
+        // pixels_per_point every frame ignored the monitor scale and made
+        // text blurry/resize mid-frame on Windows.
+        if (ctx.zoom_factor() - self.ui_scale).abs() > 0.001 {
+            ctx.set_zoom_factor(self.ui_scale);
+        }
 
-        self.server.drain_logs();
+        self.poll_server();
+        if self.server.is_busy() {
+            ctx.request_repaint_after(Duration::from_millis(60));
+        }
         let events = self.conn.poll(&ctx);
         self.apply_events(events);
         self.toasts
@@ -585,23 +625,46 @@ impl eframe::App for SlimeVrApp {
             self.request_settings();
         }
 
-        egui::TopBottomPanel::top("header").show(&ctx, |ui| ui::header(self, ui));
+        egui::TopBottomPanel::top("header")
+            .frame(
+                egui::Frame::new()
+                    .fill(crate::theme::BG)
+                    .inner_margin(egui::Margin::symmetric(16, 10)),
+            )
+            .show(&ctx, |ui| ui::header(self, ui));
         egui::SidePanel::left("nav")
             .resizable(false)
-            .exact_width(224.0)
+            .exact_width(232.0)
+            .frame(
+                egui::Frame::new()
+                    .fill(crate::theme::BG)
+                    .inner_margin(egui::Margin::symmetric(8, 8)),
+            )
             .show(&ctx, |ui| ui::nav(self, ui));
-        egui::TopBottomPanel::bottom("footer").show(&ctx, |ui| ui::footer(self, ui));
+        egui::TopBottomPanel::bottom("footer")
+            .frame(
+                egui::Frame::new()
+                    .fill(crate::theme::BG)
+                    .inner_margin(egui::Margin::symmetric(16, 6)),
+            )
+            .show(&ctx, |ui| ui::footer(self, ui));
 
-        egui::CentralPanel::default().show(&ctx, |ui| match self.page {
-            Page::Dashboard => ui::dashboard::show(self, ui),
-            Page::Trackers => ui::trackers::show(self, ui),
-            Page::Reset => ui::reset::show(self, ui),
-            Page::Proportions => ui::proportions::show(self, ui),
-            Page::Checklist => ui::checklist::show(self, ui),
-            Page::Settings => ui::settings::show(self, ui),
-            Page::Console => ui::console::show(self, ui),
-            Page::Server => ui::server::show(self, ui),
-        });
+        egui::CentralPanel::default()
+            .frame(
+                egui::Frame::new()
+                    .fill(crate::theme::BG)
+                    .inner_margin(egui::Margin::same(16)),
+            )
+            .show(&ctx, |ui| match self.page {
+                Page::Dashboard => ui::dashboard::show(self, ui),
+                Page::Trackers => ui::trackers::show(self, ui),
+                Page::Reset => ui::reset::show(self, ui),
+                Page::Proportions => ui::proportions::show(self, ui),
+                Page::Checklist => ui::checklist::show(self, ui),
+                Page::Settings => ui::settings::show(self, ui),
+                Page::Console => ui::console::show(self, ui),
+                Page::Server => ui::server::show(self, ui),
+            });
 
         if self.ui_scale != previous_scale {
             self.config.ui_scale = self.ui_scale;

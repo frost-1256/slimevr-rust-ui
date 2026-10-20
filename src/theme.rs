@@ -40,7 +40,7 @@ pub fn apply(ctx: &egui::Context) {
     ctx.set_visuals(visuals);
 
     ctx.all_styles_mut(|style| {
-        style.spacing.item_spacing = Vec2::new(10.0, 10.0);
+        style.spacing.item_spacing = Vec2::new(10.0, 8.0);
         style.spacing.button_padding = Vec2::new(14.0, 9.0);
         style.spacing.interact_size.y = 34.0;
         style.spacing.slider_width = 200.0;
@@ -65,8 +65,8 @@ pub fn card<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     egui::Frame::new()
         .fill(SURFACE)
         .stroke(Stroke::new(1.0_f32, SURFACE_ALT))
-        .corner_radius(egui::CornerRadius::same(12))
-        .inner_margin(egui::Margin::same(16))
+        .corner_radius(egui::CornerRadius::same(14))
+        .inner_margin(egui::Margin::symmetric(18, 14))
         .show(ui, add)
         .inner
 }

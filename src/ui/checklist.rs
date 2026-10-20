@@ -27,9 +27,11 @@ pub fn show(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
 
         let done = checklist.steps.iter().filter(|step| step.valid).count();
         let total = checklist.steps.len();
+        // `desired_width(f32::INFINITY)` allocated an infinite rect and made
+        // the tessellator panic as soon as a real checklist arrived.
         ui.add(
             egui::ProgressBar::new(done as f32 / total.max(1) as f32)
-                .desired_width(f32::INFINITY)
+                .desired_width(ui.available_width())
                 .text(format!("{done} / {total} 項目完了")),
         );
         if checklist.remaining() == 0 {
