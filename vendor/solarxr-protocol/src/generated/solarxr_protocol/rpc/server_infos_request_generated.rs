@@ -2,13 +2,13 @@
 // @generated
 extern crate alloc;
 extern crate flatbuffers;
+use self::flatbuffers::{EndianScalar, Follow};
+use super::*;
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use core::mem;
 use core::cmp::Ordering;
-use self::flatbuffers::{EndianScalar, Follow};
-use super::*;
+use core::mem;
 pub enum ServerInfosRequestOffset {}
 #[derive(Copy, Clone, PartialEq)]
 
@@ -17,78 +17,78 @@ pub enum ServerInfosRequestOffset {}
 /// the current working dir and other information we might want to show in the gui
 /// for information/debug purposes
 pub struct ServerInfosRequest<'a> {
-  pub _tab: flatbuffers::Table<'a>,
+    pub _tab: flatbuffers::Table<'a>,
 }
 
 impl<'a> flatbuffers::Follow<'a> for ServerInfosRequest<'a> {
-  type Inner = ServerInfosRequest<'a>;
-  #[inline]
-  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-    Self { _tab: flatbuffers::Table::new(buf, loc) }
-  }
+    type Inner = ServerInfosRequest<'a>;
+    #[inline]
+    unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+        Self {
+            _tab: flatbuffers::Table::new(buf, loc),
+        }
+    }
 }
 
 impl<'a> ServerInfosRequest<'a> {
-
-  #[inline]
-  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
-    ServerInfosRequest { _tab: table }
-  }
-  #[allow(unused_mut)]
-  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
-    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
-    _args: &'args ServerInfosRequestArgs
-  ) -> flatbuffers::WIPOffset<ServerInfosRequest<'bldr>> {
-    let mut builder = ServerInfosRequestBuilder::new(_fbb);
-    builder.finish()
-  }
-
+    #[inline]
+    pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+        ServerInfosRequest { _tab: table }
+    }
+    #[allow(unused_mut)]
+    pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+        _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+        _args: &'args ServerInfosRequestArgs,
+    ) -> flatbuffers::WIPOffset<ServerInfosRequest<'bldr>> {
+        let mut builder = ServerInfosRequestBuilder::new(_fbb);
+        builder.finish()
+    }
 }
 
 impl flatbuffers::Verifiable for ServerInfosRequest<'_> {
-  #[inline]
-  fn run_verifier(
-    v: &mut flatbuffers::Verifier, pos: usize
-  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
-    use self::flatbuffers::Verifiable;
-    v.visit_table(pos)?
-     .finish();
-    Ok(())
-  }
-}
-pub struct ServerInfosRequestArgs {
-}
-impl<'a> Default for ServerInfosRequestArgs {
-  #[inline]
-  fn default() -> Self {
-    ServerInfosRequestArgs {
+    #[inline]
+    fn run_verifier(
+        v: &mut flatbuffers::Verifier,
+        pos: usize,
+    ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+        use self::flatbuffers::Verifiable;
+        v.visit_table(pos)?.finish();
+        Ok(())
     }
-  }
+}
+pub struct ServerInfosRequestArgs {}
+impl<'a> Default for ServerInfosRequestArgs {
+    #[inline]
+    fn default() -> Self {
+        ServerInfosRequestArgs {}
+    }
 }
 
 pub struct ServerInfosRequestBuilder<'a: 'b, 'b> {
-  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
-  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+    start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
 }
 impl<'a: 'b, 'b> ServerInfosRequestBuilder<'a, 'b> {
-  #[inline]
-  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> ServerInfosRequestBuilder<'a, 'b> {
-    let start = _fbb.start_table();
-    ServerInfosRequestBuilder {
-      fbb_: _fbb,
-      start_: start,
+    #[inline]
+    pub fn new(
+        _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+    ) -> ServerInfosRequestBuilder<'a, 'b> {
+        let start = _fbb.start_table();
+        ServerInfosRequestBuilder {
+            fbb_: _fbb,
+            start_: start,
+        }
     }
-  }
-  #[inline]
-  pub fn finish(self) -> flatbuffers::WIPOffset<ServerInfosRequest<'a>> {
-    let o = self.fbb_.end_table(self.start_);
-    flatbuffers::WIPOffset::new(o.value())
-  }
+    #[inline]
+    pub fn finish(self) -> flatbuffers::WIPOffset<ServerInfosRequest<'a>> {
+        let o = self.fbb_.end_table(self.start_);
+        flatbuffers::WIPOffset::new(o.value())
+    }
 }
 
 impl core::fmt::Debug for ServerInfosRequest<'_> {
-  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-    let mut ds = f.debug_struct("ServerInfosRequest");
-      ds.finish()
-  }
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut ds = f.debug_struct("ServerInfosRequest");
+        ds.finish()
+    }
 }

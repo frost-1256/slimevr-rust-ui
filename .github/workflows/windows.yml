@@ -70,9 +70,61 @@ jobs:
       # (GDI), and egui_glow needs 2.0+. Startup is covered by the Linux
       # Xvfb job, which runs the same binary code path via llvmpipe.
 
-      - name: Upload executable
+      - name: Checkout SlimeVR Server
+        uses: actions/checkout@v4
+        with:
+          # Frozen so a UI release always ships the server it was tested with.
+          repository: frost-1256/SlimeVR-Server
+          ref: 64b9dba4502b5b30183ac3678fd81e8050a6399f
+          path: server-src
+
+      - name: Install JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Build server jar
+        working-directory: server-src
+        run: ./gradlew.bat :server:desktop:shadowJar --no-daemon
+
+      # The server only needs these modules (jdeps on the shadow jar), so a
+      # jlink runtime keeps the bundle around 50 MB instead of a full JDK.
+      - name: Build bundled JRE
+        shell: pwsh
+        run: |
+          jlink --add-modules java.base,java.desktop,java.logging,java.management,java.naming,java.sql,jdk.unsupported,jdk.crypto.ec `
+            --strip-debug --no-man-pages --no-header-files --compress=2 `
+            --output dist/jre
+
+      - name: Assemble bundle
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item target\release\slimevr-native-ui.exe dist\
+          Copy-Item server-src\server\desktop\build\libs\slimevr.jar dist\
+          Get-ChildItem dist | Select-Object Name
+          (Get-Item dist\slimevr-native-ui.exe).Length
+          (Get-Item dist\slimevr.jar).Length
+
+      - name: Verify bundled server starts
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath dist\slimevr-native-ui.exe -ArgumentList "--start-server" `
+            -RedirectStandardOutput server.out -RedirectStandardError server.err -PassThru
+          if (-not $process.WaitForExit(180000)) {
+            Stop-Process -Id $process.Id -Force
+            throw "bundled server check timed out"
+          }
+          Get-Content server.out -ErrorAction SilentlyContinue
+          Get-Content server.err -ErrorAction SilentlyContinue
+          if ($process.ExitCode -ne 0) {
+            throw "bundled server check failed with $($process.ExitCode)"
+          }
+
+      - name: Upload bundle
         uses: actions/upload-artifact@v4
         with:
           name: slimevr-native-ui-win64
-          path: target/release/slimevr-native-ui.exe
+          path: dist/
           if-no-files-found: error

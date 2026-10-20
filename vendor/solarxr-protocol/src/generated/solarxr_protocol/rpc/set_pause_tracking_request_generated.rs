@@ -2,108 +2,120 @@
 // @generated
 extern crate alloc;
 extern crate flatbuffers;
+use self::flatbuffers::{EndianScalar, Follow};
+use super::*;
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use core::mem;
 use core::cmp::Ordering;
-use self::flatbuffers::{EndianScalar, Follow};
-use super::*;
+use core::mem;
 pub enum SetPauseTrackingRequestOffset {}
 #[derive(Copy, Clone, PartialEq)]
 
 pub struct SetPauseTrackingRequest<'a> {
-  pub _tab: flatbuffers::Table<'a>,
+    pub _tab: flatbuffers::Table<'a>,
 }
 
 impl<'a> flatbuffers::Follow<'a> for SetPauseTrackingRequest<'a> {
-  type Inner = SetPauseTrackingRequest<'a>;
-  #[inline]
-  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-    Self { _tab: flatbuffers::Table::new(buf, loc) }
-  }
+    type Inner = SetPauseTrackingRequest<'a>;
+    #[inline]
+    unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+        Self {
+            _tab: flatbuffers::Table::new(buf, loc),
+        }
+    }
 }
 
 impl<'a> SetPauseTrackingRequest<'a> {
-  pub const VT_PAUSETRACKING: flatbuffers::VOffsetT = 4;
+    pub const VT_PAUSETRACKING: flatbuffers::VOffsetT = 4;
 
-  #[inline]
-  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
-    SetPauseTrackingRequest { _tab: table }
-  }
-  #[allow(unused_mut)]
-  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
-    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
-    args: &'args SetPauseTrackingRequestArgs
-  ) -> flatbuffers::WIPOffset<SetPauseTrackingRequest<'bldr>> {
-    let mut builder = SetPauseTrackingRequestBuilder::new(_fbb);
-    builder.add_pauseTracking(args.pauseTracking);
-    builder.finish()
-  }
+    #[inline]
+    pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+        SetPauseTrackingRequest { _tab: table }
+    }
+    #[allow(unused_mut)]
+    pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+        _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+        args: &'args SetPauseTrackingRequestArgs,
+    ) -> flatbuffers::WIPOffset<SetPauseTrackingRequest<'bldr>> {
+        let mut builder = SetPauseTrackingRequestBuilder::new(_fbb);
+        builder.add_pauseTracking(args.pauseTracking);
+        builder.finish()
+    }
 
-
-  /// Pauses skeleton tracking if true, resumes skeleton tracking if false.
-  #[inline]
-  pub fn pauseTracking(&self) -> bool {
-    // Safety:
-    // Created from valid Table for this object
-    // which contains a valid value in this slot
-    unsafe { self._tab.get::<bool>(SetPauseTrackingRequest::VT_PAUSETRACKING, Some(false)).unwrap()}
-  }
+    /// Pauses skeleton tracking if true, resumes skeleton tracking if false.
+    #[inline]
+    pub fn pauseTracking(&self) -> bool {
+        // Safety:
+        // Created from valid Table for this object
+        // which contains a valid value in this slot
+        unsafe {
+            self._tab
+                .get::<bool>(SetPauseTrackingRequest::VT_PAUSETRACKING, Some(false))
+                .unwrap()
+        }
+    }
 }
 
 impl flatbuffers::Verifiable for SetPauseTrackingRequest<'_> {
-  #[inline]
-  fn run_verifier(
-    v: &mut flatbuffers::Verifier, pos: usize
-  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
-    use self::flatbuffers::Verifiable;
-    v.visit_table(pos)?
-     .visit_field::<bool>("pauseTracking", Self::VT_PAUSETRACKING, false)?
-     .finish();
-    Ok(())
-  }
+    #[inline]
+    fn run_verifier(
+        v: &mut flatbuffers::Verifier,
+        pos: usize,
+    ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+        use self::flatbuffers::Verifiable;
+        v.visit_table(pos)?
+            .visit_field::<bool>("pauseTracking", Self::VT_PAUSETRACKING, false)?
+            .finish();
+        Ok(())
+    }
 }
 pub struct SetPauseTrackingRequestArgs {
     pub pauseTracking: bool,
 }
 impl<'a> Default for SetPauseTrackingRequestArgs {
-  #[inline]
-  fn default() -> Self {
-    SetPauseTrackingRequestArgs {
-      pauseTracking: false,
+    #[inline]
+    fn default() -> Self {
+        SetPauseTrackingRequestArgs {
+            pauseTracking: false,
+        }
     }
-  }
 }
 
 pub struct SetPauseTrackingRequestBuilder<'a: 'b, 'b> {
-  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
-  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+    start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
 }
 impl<'a: 'b, 'b> SetPauseTrackingRequestBuilder<'a, 'b> {
-  #[inline]
-  pub fn add_pauseTracking(&mut self, pauseTracking: bool) {
-    self.fbb_.push_slot::<bool>(SetPauseTrackingRequest::VT_PAUSETRACKING, pauseTracking, false);
-  }
-  #[inline]
-  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> SetPauseTrackingRequestBuilder<'a, 'b> {
-    let start = _fbb.start_table();
-    SetPauseTrackingRequestBuilder {
-      fbb_: _fbb,
-      start_: start,
+    #[inline]
+    pub fn add_pauseTracking(&mut self, pauseTracking: bool) {
+        self.fbb_.push_slot::<bool>(
+            SetPauseTrackingRequest::VT_PAUSETRACKING,
+            pauseTracking,
+            false,
+        );
     }
-  }
-  #[inline]
-  pub fn finish(self) -> flatbuffers::WIPOffset<SetPauseTrackingRequest<'a>> {
-    let o = self.fbb_.end_table(self.start_);
-    flatbuffers::WIPOffset::new(o.value())
-  }
+    #[inline]
+    pub fn new(
+        _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+    ) -> SetPauseTrackingRequestBuilder<'a, 'b> {
+        let start = _fbb.start_table();
+        SetPauseTrackingRequestBuilder {
+            fbb_: _fbb,
+            start_: start,
+        }
+    }
+    #[inline]
+    pub fn finish(self) -> flatbuffers::WIPOffset<SetPauseTrackingRequest<'a>> {
+        let o = self.fbb_.end_table(self.start_);
+        flatbuffers::WIPOffset::new(o.value())
+    }
 }
 
 impl core::fmt::Debug for SetPauseTrackingRequest<'_> {
-  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-    let mut ds = f.debug_struct("SetPauseTrackingRequest");
-      ds.field("pauseTracking", &self.pauseTracking());
-      ds.finish()
-  }
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut ds = f.debug_struct("SetPauseTrackingRequest");
+        ds.field("pauseTracking", &self.pauseTracking());
+        ds.finish()
+    }
 }

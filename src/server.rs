@@ -81,6 +81,11 @@ impl ServerProcess {
             .filter(|path| path.is_file())
             .map(Path::to_path_buf)
             .or_else(|| self.jar.as_deref().and_then(|jar| find_java(jar.parent())));
+        log::info!(
+            "サーバー検出: jar={} java={}",
+            self.jar_display(),
+            self.java_display()
+        );
     }
 
     pub fn drain_logs(&mut self) {

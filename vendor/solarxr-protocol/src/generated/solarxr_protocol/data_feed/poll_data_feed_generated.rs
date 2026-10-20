@@ -2,109 +2,122 @@
 // @generated
 extern crate alloc;
 extern crate flatbuffers;
+use self::flatbuffers::{EndianScalar, Follow};
+use super::*;
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use core::mem;
 use core::cmp::Ordering;
-use self::flatbuffers::{EndianScalar, Follow};
-use super::*;
+use core::mem;
 pub enum PollDataFeedOffset {}
 #[derive(Copy, Clone, PartialEq)]
 
 /// Requests for a single `Update` to be sent. This is helpful when getting
 /// initial info about the device.
 pub struct PollDataFeed<'a> {
-  pub _tab: flatbuffers::Table<'a>,
+    pub _tab: flatbuffers::Table<'a>,
 }
 
 impl<'a> flatbuffers::Follow<'a> for PollDataFeed<'a> {
-  type Inner = PollDataFeed<'a>;
-  #[inline]
-  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-    Self { _tab: flatbuffers::Table::new(buf, loc) }
-  }
+    type Inner = PollDataFeed<'a>;
+    #[inline]
+    unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+        Self {
+            _tab: flatbuffers::Table::new(buf, loc),
+        }
+    }
 }
 
 impl<'a> PollDataFeed<'a> {
-  pub const VT_CONFIG: flatbuffers::VOffsetT = 4;
+    pub const VT_CONFIG: flatbuffers::VOffsetT = 4;
 
-  #[inline]
-  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
-    PollDataFeed { _tab: table }
-  }
-  #[allow(unused_mut)]
-  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
-    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
-    args: &'args PollDataFeedArgs<'args>
-  ) -> flatbuffers::WIPOffset<PollDataFeed<'bldr>> {
-    let mut builder = PollDataFeedBuilder::new(_fbb);
-    if let Some(x) = args.config { builder.add_config(x); }
-    builder.finish()
-  }
+    #[inline]
+    pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+        PollDataFeed { _tab: table }
+    }
+    #[allow(unused_mut)]
+    pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+        _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+        args: &'args PollDataFeedArgs<'args>,
+    ) -> flatbuffers::WIPOffset<PollDataFeed<'bldr>> {
+        let mut builder = PollDataFeedBuilder::new(_fbb);
+        if let Some(x) = args.config {
+            builder.add_config(x);
+        }
+        builder.finish()
+    }
 
-
-  #[inline]
-  pub fn config(&self) -> Option<DataFeedConfig<'a>> {
-    // Safety:
-    // Created from valid Table for this object
-    // which contains a valid value in this slot
-    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<DataFeedConfig>>(PollDataFeed::VT_CONFIG, None)}
-  }
+    #[inline]
+    pub fn config(&self) -> Option<DataFeedConfig<'a>> {
+        // Safety:
+        // Created from valid Table for this object
+        // which contains a valid value in this slot
+        unsafe {
+            self._tab
+                .get::<flatbuffers::ForwardsUOffset<DataFeedConfig>>(PollDataFeed::VT_CONFIG, None)
+        }
+    }
 }
 
 impl flatbuffers::Verifiable for PollDataFeed<'_> {
-  #[inline]
-  fn run_verifier(
-    v: &mut flatbuffers::Verifier, pos: usize
-  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
-    use self::flatbuffers::Verifiable;
-    v.visit_table(pos)?
-     .visit_field::<flatbuffers::ForwardsUOffset<DataFeedConfig>>("config", Self::VT_CONFIG, false)?
-     .finish();
-    Ok(())
-  }
+    #[inline]
+    fn run_verifier(
+        v: &mut flatbuffers::Verifier,
+        pos: usize,
+    ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+        use self::flatbuffers::Verifiable;
+        v.visit_table(pos)?
+            .visit_field::<flatbuffers::ForwardsUOffset<DataFeedConfig>>(
+                "config",
+                Self::VT_CONFIG,
+                false,
+            )?
+            .finish();
+        Ok(())
+    }
 }
 pub struct PollDataFeedArgs<'a> {
     pub config: Option<flatbuffers::WIPOffset<DataFeedConfig<'a>>>,
 }
 impl<'a> Default for PollDataFeedArgs<'a> {
-  #[inline]
-  fn default() -> Self {
-    PollDataFeedArgs {
-      config: None,
+    #[inline]
+    fn default() -> Self {
+        PollDataFeedArgs { config: None }
     }
-  }
 }
 
 pub struct PollDataFeedBuilder<'a: 'b, 'b> {
-  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
-  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+    start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
 }
 impl<'a: 'b, 'b> PollDataFeedBuilder<'a, 'b> {
-  #[inline]
-  pub fn add_config(&mut self, config: flatbuffers::WIPOffset<DataFeedConfig<'b >>) {
-    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<DataFeedConfig>>(PollDataFeed::VT_CONFIG, config);
-  }
-  #[inline]
-  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> PollDataFeedBuilder<'a, 'b> {
-    let start = _fbb.start_table();
-    PollDataFeedBuilder {
-      fbb_: _fbb,
-      start_: start,
+    #[inline]
+    pub fn add_config(&mut self, config: flatbuffers::WIPOffset<DataFeedConfig<'b>>) {
+        self.fbb_
+            .push_slot_always::<flatbuffers::WIPOffset<DataFeedConfig>>(
+                PollDataFeed::VT_CONFIG,
+                config,
+            );
     }
-  }
-  #[inline]
-  pub fn finish(self) -> flatbuffers::WIPOffset<PollDataFeed<'a>> {
-    let o = self.fbb_.end_table(self.start_);
-    flatbuffers::WIPOffset::new(o.value())
-  }
+    #[inline]
+    pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> PollDataFeedBuilder<'a, 'b> {
+        let start = _fbb.start_table();
+        PollDataFeedBuilder {
+            fbb_: _fbb,
+            start_: start,
+        }
+    }
+    #[inline]
+    pub fn finish(self) -> flatbuffers::WIPOffset<PollDataFeed<'a>> {
+        let o = self.fbb_.end_table(self.start_);
+        flatbuffers::WIPOffset::new(o.value())
+    }
 }
 
 impl core::fmt::Debug for PollDataFeed<'_> {
-  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-    let mut ds = f.debug_struct("PollDataFeed");
-      ds.field("config", &self.config());
-      ds.finish()
-  }
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut ds = f.debug_struct("PollDataFeed");
+        ds.field("config", &self.config());
+        ds.finish()
+    }
 }

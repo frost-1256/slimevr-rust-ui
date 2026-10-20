@@ -45,11 +45,12 @@ Smoke test (renders for 3 seconds, prints `smoke-ok`, exits 0):
 cargo run -- --smoke-test
 ```
 
-## Windows build
+## Windows bundle
 
-GitHub Actions runs the test suite and an Xvfb smoke test on Linux, builds
-`target/release/slimevr-native-ui.exe`, and uploads
-`slimevr-native-ui-win64`.
+The Windows artifact is a ready-to-run folder: the executable, `slimevr.jar`
+built from a pinned SlimeVR-Server commit, and a `jlink` runtime under `jre/`
+(so no system Java is needed). CI verifies the bundle by running
+`slimevr-native-ui.exe --start-server`, which boots the jar and waits for port 21110.
 
 ## Tests
 
@@ -72,8 +73,9 @@ The suite covers protocol compatibility quirks rather than the UI itself:
 - No automatic firmware release lookup; OTA requires a URL and digest.
 - PubSub (`solarxr-protocol` pub/sub) is not implemented; the UI uses RPC and a
   single data feed.
-- The server process panel requires an existing `slimevr.jar` and Java 17+; the
-  UI does not download or install Java.
+- The Windows bundle ships its own jar and JRE; source builds need a
+  `slimevr.jar` and Java 17+ on the machine (found next to the executable, via
+  `JAVA_HOME`, `/usr/lib/jvm`, or PATH).
 - Only Windows x64 artifacts are produced by CI; other platforms build from
   source.
 - SteamVR trackers/the driver bridge sections are hidden when the server reports
