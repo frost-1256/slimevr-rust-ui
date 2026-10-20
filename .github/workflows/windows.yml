@@ -100,7 +100,7 @@ jobs:
       - name: Build bundled JRE
         shell: pwsh
         run: |
-          jlink --add-modules java.base,java.desktop,java.logging,java.management,java.naming,java.sql,jdk.unsupported,jdk.crypto.ec `
+          jlink --add-modules java.base,java.desktop,java.logging,java.management,java.naming,java.sql,jdk.unsupported,jdk.crypto.ec,jdk.httpserver `
             --strip-debug --no-man-pages --no-header-files --compress=2 `
             --output dist/jre
 
