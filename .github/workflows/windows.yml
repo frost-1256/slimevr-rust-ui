@@ -1,4 +1,4 @@
-name: Windows build
+name: CI
 
 on:
   push:
@@ -10,8 +10,32 @@ permissions:
   contents: read
 
 jobs:
+  linux:
+    name: Format, lint, test (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Test
+        run: cargo test --locked
+
   windows:
-    name: Windows x64
+    name: Windows x64 build
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -28,6 +52,19 @@ jobs:
 
       - name: Build
         run: cargo build --release --locked
+
+      - name: Smoke test (headless, 3 s)
+        shell: pwsh
+        run: |
+          $exe = "target\release\slimevr-native-ui.exe"
+          $process = Start-Process -FilePath $exe -ArgumentList "--smoke-test" -PassThru
+          if (-not $process.WaitForExit(30000)) {
+            Stop-Process -Id $process.Id -Force
+            throw "smoke test timed out"
+          }
+          if ($process.ExitCode -ne 0) {
+            throw "smoke test exited with $($process.ExitCode)"
+          }
 
       - name: Upload executable
         uses: actions/upload-artifact@v4

@@ -1,544 +1,591 @@
-use crate::mock::{Calibration, MockServer, Tab, Tracker};
-use crate::theme;
-use eframe::egui::{self, Align, Color32, Layout, RichText, Stroke, Vec2};
+//! Application state and the top-level frame.
+
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-pub struct SlimeVrApp {
-    tab: Tab,
-    server: MockServer,
-    calibration: Calibration,
-    settings: Settings,
-    smoke_deadline: Option<Instant>,
+use eframe::egui;
+
+use crate::config::LocalConfig;
+use crate::model::*;
+use crate::net::{ConnState, Connection};
+use crate::server::{ServerProcess, format_mac, port_is_free};
+use crate::ui;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Page {
+    Dashboard,
+    Trackers,
+    Reset,
+    Proportions,
+    Checklist,
+    Settings,
+    Console,
+    Server,
 }
 
-struct Settings {
-    port: u16,
-    osc: bool,
-    vmc: bool,
-    steamvr: bool,
-    auto_bone: bool,
-    smoothing: f32,
-}
+impl Page {
+    pub const ALL: [(Page, &'static str); 8] = [
+        (Page::Dashboard, "ダッシュボード"),
+        (Page::Trackers, "トラッカー"),
+        (Page::Reset, "リセット"),
+        (Page::Proportions, "ボディプロポーション"),
+        (Page::Checklist, "チェックリスト"),
+        (Page::Settings, "設定"),
+        (Page::Console, "シリアル / FW"),
+        (Page::Server, "サーバー"),
+    ];
 
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            port: 6969,
-            osc: true,
-            vmc: false,
-            steamvr: true,
-            auto_bone: true,
-            smoothing: 0.65,
-        }
+    pub fn label(self) -> &'static str {
+        Self::ALL
+            .iter()
+            .find(|(page, _)| *page == self)
+            .map(|(_, label)| *label)
+            .unwrap_or("?")
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct Toast {
+    pub text: String,
+    pub severity: Severity,
+    pub created: Instant,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Severity {
+    Info,
+    Success,
+    Warning,
+    Error,
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct SerialState {
+    pub devices: Vec<(String, String, u8)>,
+    pub log: Vec<String>,
+    pub open: bool,
+    pub command: String,
+    pub ssid: String,
+    pub password: String,
+    pub provisioning_status: Option<u8>,
+    pub device: Option<String>,
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct FirmwareState {
+    pub progress: HashMap<String, (i8, u8)>,
+    pub url: String,
+    pub digest: String,
+    pub selected_devices: Vec<u8>,
+    pub last_note: Option<String>,
+}
+
+pub struct SlimeVrApp {
+    pub conn: Connection,
+    pub config: LocalConfig,
+    pub server: ServerProcess,
+    pub page: Page,
+
+    pub devices: Vec<Device>,
+    pub synthetic: Vec<Tracker>,
+    pub bones: Vec<Bone>,
+    pub guards: Guards,
+    pub settings: ServerSettings,
+    pub skeleton: SkeletonConfig,
+    pub checklist: Checklist,
+    pub paused: bool,
+    pub resets: Vec<ResetProgress>,
+    pub local_ip: Option<String>,
+    pub vrc: Option<VrcConfigState>,
+    pub autobone: Option<AutoBoneStatus>,
+    pub user_height: Option<UserHeightStatus>,
+    pub installed_info: Option<(bool, bool)>,
+    pub serial: SerialState,
+    pub firmware: FirmwareState,
+
+    pub drafts: ui::settings::SettingsDrafts,
+
+    pub selected: Option<TrackerKey>,
+    pub rename_buffer: String,
+    pub rename_key: Option<TrackerKey>,
+    pub assign_filter: String,
+    pub forget_confirm: Option<(u8, Instant)>,
+    pub reset_include_feet: bool,
+    pub reset_include_fingers: bool,
+    pub toasts: Vec<Toast>,
+    pub event_log: Vec<String>,
+    /// Frame times of the last second, used for the footer stats line.
+    frame_times: Vec<Instant>,
+    pub smoke_test: bool,
+    pub smoke_deadline: Option<Instant>,
+    pub show_help: bool,
+    pub ui_scale: f32,
+    pub last_settings_request: Instant,
 }
 
 impl SlimeVrApp {
     pub fn new(cc: &eframe::CreationContext<'_>, smoke_test: bool) -> Self {
-        theme::apply(&cc.egui_ctx);
-
-        Self {
-            tab: Tab::Dashboard,
-            server: MockServer::new(),
-            calibration: Calibration::new(),
-            settings: Settings::default(),
-            smoke_deadline: smoke_test.then(|| Instant::now() + Duration::from_secs(3)),
+        let mut config = LocalConfig::load();
+        if smoke_test {
+            // Keep automated runs hermetic: never touch the real config file.
+            config.server_url = crate::net::DEFAULT_URL.to_string();
         }
-    }
 
-    fn top_bar(&mut self, ui: &mut egui::Ui) {
-        egui::Panel::top("top_bar")
-            .exact_size(58.0)
-            .frame(
-                egui::Frame::new()
-                    .fill(theme::SURFACE)
-                    .stroke(Stroke::new(1.0, theme::BORDER))
-                    .inner_margin(egui::Margin::symmetric(18, 9)),
-            )
-            .show(ui, |ui| {
-                ui.horizontal_centered(|ui| {
-                    ui.label(
-                        RichText::new("SLIMEVR")
-                            .size(21.0)
-                            .strong()
-                            .color(theme::ACCENT),
-                    );
-                    ui.label(
-                        RichText::new("native ui · mock")
-                            .size(12.0)
-                            .color(theme::MUTED),
-                    );
+        if let Some(path) = crate::config::server_config_path(config.server_dir.as_deref()) {
+            config.muted_warnings = crate::config::read_muted_warnings(&path);
+        }
 
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        let (label, color) = if self.server.running {
-                            ("● Running", theme::OK)
-                        } else {
-                            ("● Stopped", theme::MUTED)
-                        };
-                        egui::Frame::new()
-                            .fill(color.gamma_multiply(0.12))
-                            .corner_radius(12)
-                            .inner_margin(egui::Margin::symmetric(10, 4))
-                            .show(ui, |ui| {
-                                ui.label(RichText::new(label).small().color(color));
-                            });
+        let mut server = ServerProcess::default();
+        server.detect(config.server_dir.as_deref(), config.java_path.as_deref());
 
-                        let action = if self.server.running {
-                            "Stop server"
-                        } else {
-                            "Start server"
-                        };
-                        if ui.button(action).clicked() {
-                            if self.server.running {
-                                self.server.stop();
-                            } else {
-                                self.server.start();
-                            }
-                        }
+        let ui_scale = config.ui_scale.clamp(0.75, 2.0);
+        crate::theme::apply(&cc.egui_ctx);
 
-                        ui.label(
-                            RichText::new(format!("127.0.0.1:{}", self.server.port))
-                                .monospace()
-                                .color(theme::MUTED),
-                        );
-                    });
-                });
-            });
-    }
-
-    fn nav(&mut self, ui: &mut egui::Ui) {
-        egui::Panel::left("navigation")
-            .resizable(false)
-            .exact_size(212.0)
-            .frame(
-                egui::Frame::new()
-                    .fill(theme::SURFACE)
-                    .stroke(Stroke::new(1.0, theme::BORDER))
-                    .inner_margin(egui::Margin::symmetric(12, 12)),
-            )
-            .show(ui, |ui| {
-                ui.add_space(6.0);
-                ui.label(RichText::new("NAVIGATION").small().color(theme::MUTED));
-                ui.add_space(6.0);
-
-                for (tab, label) in Tab::ALL {
-                    let selected = self.tab == tab;
-                    let text = RichText::new(label).size(15.0).color(if selected {
-                        theme::ACCENT
-                    } else {
-                        theme::TEXT
-                    });
-                    let button = egui::Button::new(text)
-                        .fill(if selected {
-                            theme::SURFACE_ALT
-                        } else {
-                            Color32::TRANSPARENT
-                        })
-                        .stroke(if selected {
-                            Stroke::new(1.0, theme::ACCENT_DIM)
-                        } else {
-                            Stroke::NONE
-                        })
-                        .min_size(Vec2::new(ui.available_width(), 38.0));
-
-                    if ui.add(button).clicked() {
-                        self.tab = tab;
-                    }
-                    ui.add_space(4.0);
-                }
-
-                ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
-                    ui.add_space(10.0);
-                    ui.label(RichText::new("rust + egui").small().color(theme::MUTED));
-                    ui.label(
-                        RichText::new("protocol: not connected")
-                            .small()
-                            .color(theme::MUTED),
-                    );
-                });
-            });
-    }
-
-    fn bottom_bar(&self, ui: &mut egui::Ui) {
-        egui::Panel::bottom("status_bar")
-            .exact_size(28.0)
-            .frame(
-                egui::Frame::new()
-                    .fill(theme::SURFACE)
-                    .stroke(Stroke::new(1.0, theme::BORDER))
-                    .inner_margin(egui::Margin::symmetric(14, 4)),
-            )
-            .show(ui, |ui| {
-                ui.horizontal_centered(|ui| {
-                    ui.label(
-                        RichText::new("v0.1.0 · mock data · Windows x64")
-                            .small()
-                            .color(theme::MUTED),
-                    );
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        ui.label(
-                            RichText::new("trackers: 2.4 GHz")
-                                .small()
-                                .color(theme::MUTED),
-                        );
-                    });
-                });
-            });
-    }
-
-    fn dashboard(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            ui.heading("Dashboard");
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                ui.label(RichText::new("mock telemetry").small().color(theme::MUTED));
-            });
-        });
-        ui.add_space(2.0);
-        ui.label(
-            RichText::new(
-                "This screen uses fixture data. The server protocol is not wired up yet.",
-            )
-            .color(theme::MUTED),
-        );
-        ui.add_space(14.0);
-
-        let online = self.server.online_count();
-        let total = self.server.trackers.len();
-        let average_battery = self.server.average_battery();
-        let uptime = self.server.uptime_label();
-        let (server_state, server_color) = if self.server.running {
-            ("Running", theme::OK)
-        } else {
-            ("Stopped", theme::MUTED)
+        let mut app = Self {
+            conn: Connection::new(config.server_url.clone()),
+            config,
+            server,
+            page: Page::Dashboard,
+            devices: Vec::new(),
+            synthetic: Vec::new(),
+            bones: Vec::new(),
+            guards: Guards::default(),
+            settings: ServerSettings::default(),
+            skeleton: SkeletonConfig {
+                bones: Default::default(),
+                user_height: 0.0,
+                reset: false,
+            },
+            checklist: Checklist::default(),
+            paused: false,
+            resets: Vec::new(),
+            local_ip: None,
+            vrc: None,
+            autobone: None,
+            user_height: None,
+            installed_info: None,
+            serial: SerialState::default(),
+            firmware: FirmwareState::default(),
+            drafts: Default::default(),
+            selected: None,
+            rename_buffer: String::new(),
+            rename_key: None,
+            assign_filter: String::new(),
+            forget_confirm: None,
+            reset_include_feet: false,
+            reset_include_fingers: false,
+            toasts: Vec::new(),
+            event_log: Vec::new(),
+            frame_times: Vec::new(),
+            smoke_test,
+            smoke_deadline: None,
+            show_help: false,
+            ui_scale,
+            last_settings_request: Instant::now(),
         };
-
-        ui.columns(4, |columns| {
-            stat_card(
-                &mut columns[0],
-                "Trackers",
-                &format!("{online}/{total}"),
-                theme::ACCENT,
-            );
-            stat_card(
-                &mut columns[1],
-                "Avg. battery",
-                &format!("{average_battery}%"),
-                theme::battery_color(average_battery),
-            );
-            stat_card(&mut columns[2], "Server", server_state, server_color);
-            stat_card(&mut columns[3], "Uptime", &uptime, theme::PURPLE);
-        });
-
-        ui.add_space(18.0);
-        ui.label(
-            RichText::new("TRACKER OVERVIEW")
-                .small()
-                .color(theme::MUTED),
-        );
-        ui.add_space(4.0);
-
-        egui::Grid::new("dashboard_trackers")
-            .num_columns(3)
-            .spacing([12.0, 12.0])
-            .show(ui, |ui| {
-                for (index, tracker) in self.server.trackers.iter().enumerate() {
-                    tracker_card(ui, tracker);
-                    if (index + 1) % 3 == 0 {
-                        ui.end_row();
-                    }
-                }
-            });
+        app.conn.include_bones = app.config.include_bones;
+        app
     }
 
-    fn trackers_view(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Trackers");
-        ui.label(
-            RichText::new("Fixture trackers. Reset changes only the in-memory mock state.")
-                .color(theme::MUTED),
-        );
-        ui.add_space(12.0);
+    // -- helpers -----------------------------------------------------------
 
-        let mut reset_id = None;
-        theme::card(ui, |ui| {
-            egui::ScrollArea::vertical()
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    egui::Grid::new("tracker_table")
-                        .num_columns(7)
-                        .striped(true)
-                        .spacing([18.0, 10.0])
-                        .show(ui, |ui| {
-                            for header in
-                                ["ID", "Name", "Role", "Battery", "RSSI", "TPS", "Actions"]
-                            {
-                                ui.label(
-                                    RichText::new(header).small().strong().color(theme::MUTED),
-                                );
-                            }
-                            ui.end_row();
-
-                            for tracker in &mut self.server.trackers {
-                                ui.label(format!("#{}", tracker.id));
-                                ui.label(RichText::new(tracker.name).strong());
-                                ui.label(RichText::new(tracker.role).color(theme::MUTED));
-
-                                ui.horizontal(|ui| {
-                                    ui.add(
-                                        egui::ProgressBar::new(f32::from(tracker.battery) / 100.0)
-                                            .desired_width(90.0)
-                                            .fill(theme::battery_color(tracker.battery))
-                                            .text(
-                                                RichText::new(format!("{}%", tracker.battery))
-                                                    .small(),
-                                            ),
-                                    );
-                                });
-
-                                ui.label(format!("{} dBm", tracker.rssi));
-                                ui.label(format!("{}", tracker.tps));
-
-                                ui.horizontal(|ui| {
-                                    let color = theme::status_color(tracker.status.label());
-                                    ui.label(RichText::new("●").color(color));
-                                    ui.label(
-                                        RichText::new(tracker.status.label()).small().color(color),
-                                    );
-                                    if ui.button("Reset").clicked() {
-                                        reset_id = Some(tracker.id);
-                                    }
-                                });
-                                ui.end_row();
-                            }
-                        });
-                });
-        });
-
-        if let Some(id) = reset_id {
-            self.server.reset_tracker(id);
+    pub fn toast(&mut self, severity: Severity, text: impl Into<String>) {
+        let text = text.into();
+        log::info!("{text}");
+        self.event_log
+            .push(format!("[{}] {}", chrono_like_stamp(), text));
+        let excess = self.event_log.len().saturating_sub(500);
+        if excess > 0 {
+            self.event_log.drain(..excess);
+        }
+        if severity != Severity::Info {
+            self.toasts.push(Toast {
+                text,
+                severity,
+                created: Instant::now(),
+            });
         }
     }
 
-    fn calibration_view(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Calibration");
-        ui.label(
-            RichText::new("Mock flow for the mounting / stand-still / walk sequence.")
-                .color(theme::MUTED),
-        );
-        ui.add_space(12.0);
+    /// Every tracker the server knows about: physical first, then computed.
+    pub fn all_trackers(&self) -> Vec<&Tracker> {
+        let mut trackers: Vec<&Tracker> = self
+            .devices
+            .iter()
+            .flat_map(|device| device.trackers.iter())
+            .collect();
+        trackers.extend(self.synthetic.iter());
+        trackers
+    }
 
-        theme::card(ui, |ui| {
-            ui.set_min_width(680.0);
-            ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new(format!("Step {}/4", self.calibration.stage() + 1))
-                        .size(18.0)
-                        .strong()
-                        .color(theme::ACCENT),
-                );
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    let state = if self.calibration.active {
-                        "in progress"
-                    } else if self.calibration.progress >= 1.0 {
-                        "complete"
+    pub fn device_of(&self, key: TrackerKey) -> Option<&Device> {
+        let id = key.device_id?;
+        self.devices.iter().find(|device| device.id == id)
+    }
+
+    pub fn connected_tracker_count(&self) -> usize {
+        self.all_trackers()
+            .iter()
+            .filter(|tracker| tracker.status.is_connected())
+            .count()
+    }
+
+    pub fn assigned_tracker_count(&self) -> usize {
+        self.all_trackers()
+            .iter()
+            .filter(|tracker| tracker.body_part != 0)
+            .count()
+    }
+
+    pub fn average_battery(&self) -> Option<f32> {
+        let values: Vec<f32> = self
+            .devices
+            .iter()
+            .filter_map(|device| device.battery_pct.map(f32::from))
+            .collect();
+        if values.is_empty() {
+            None
+        } else {
+            Some(values.iter().sum::<f32>() / values.len() as f32)
+        }
+    }
+
+    pub fn fps(&self) -> f32 {
+        let now = Instant::now();
+        let recent = self
+            .frame_times
+            .iter()
+            .filter(|time| now.duration_since(**time) < Duration::from_secs(1))
+            .count();
+        recent as f32
+    }
+
+    pub fn active_reset(&self) -> Option<&ResetProgress> {
+        self.resets.iter().find(|reset| reset.started)
+    }
+
+    // -- networking --------------------------------------------------------
+
+    pub fn send_frame(&mut self, frame: Vec<u8>, label: &str) {
+        if self.conn.state() == ConnState::Connected {
+            self.conn.send(frame);
+            log::debug!("sent {label}");
+        } else {
+            self.conn.send(frame);
+            self.toast(
+                Severity::Warning,
+                format!("{label}: サーバー未接続のため送信できません"),
+            );
+        }
+    }
+
+    pub fn request_settings(&mut self) {
+        self.last_settings_request = Instant::now();
+        self.send_frame(crate::proto::settings_request(), "設定取得");
+    }
+
+    // -- events ------------------------------------------------------------
+
+    fn apply_events(&mut self, events: Vec<ServerEvent>) {
+        for event in events {
+            match event {
+                ServerEvent::Feed(feed) => {
+                    self.devices = feed.devices;
+                    self.synthetic = feed.synthetic;
+                    self.bones = feed.bones;
+                    if let Some(guards) = feed.guards {
+                        self.guards = guards;
+                    }
+                    if let Some(selected) = self.selected
+                        && !self
+                            .all_trackers()
+                            .iter()
+                            .any(|tracker| tracker.key == selected)
+                    {
+                        self.selected = None;
+                    }
+                }
+                ServerEvent::Settings(settings) => {
+                    self.settings.merge(settings);
+                    self.drafts.sync(&self.settings);
+                }
+                ServerEvent::Reset(reset) => {
+                    if reset.started {
+                        if let Some(existing) = self
+                            .resets
+                            .iter_mut()
+                            .find(|entry| entry.reset_type == reset.reset_type)
+                        {
+                            *existing = reset;
+                        } else {
+                            self.resets.push(reset);
+                        }
                     } else {
-                        "idle"
-                    };
-                    ui.label(RichText::new(state).small().color(theme::MUTED));
-                });
-            });
-
-            ui.add_space(10.0);
-            let stages = [
-                "1. Mounting",
-                "2. Stand still",
-                "3. Walk forward",
-                "4. Verify skeleton",
-            ];
-            for (index, stage) in stages.iter().enumerate() {
-                let active = index == self.calibration.stage();
-                let done = index < self.calibration.stage() || self.calibration.progress >= 1.0;
-                let color = if done {
-                    theme::OK
-                } else if active {
-                    theme::ACCENT
-                } else {
-                    theme::MUTED
-                };
-                ui.label(RichText::new(*stage).color(color));
-            }
-
-            ui.add_space(14.0);
-            ui.add(
-                egui::ProgressBar::new(self.calibration.progress)
-                    .desired_width(640.0)
-                    .show_percentage()
-                    .fill(theme::ACCENT),
-            );
-
-            ui.add_space(12.0);
-            ui.horizontal(|ui| {
-                if self.calibration.active {
-                    if ui.button("Pause").clicked() {
-                        self.calibration.active = false;
+                        self.resets
+                            .retain(|entry| entry.reset_type != reset.reset_type);
+                        if let Some(reset_type) = reset.reset_type {
+                            self.toast(
+                                Severity::Success,
+                                format!("{} が完了しました", reset_type.label()),
+                            );
+                        }
                     }
-                } else if ui.button("Start calibration").clicked() {
-                    self.calibration.start();
                 }
-
-                if ui.button("Reset").clicked() {
-                    self.calibration.reset();
+                ServerEvent::PauseState(paused) => {
+                    let changed = self.paused != paused;
+                    self.paused = paused;
+                    if changed {
+                        self.toast(
+                            Severity::Info,
+                            if paused {
+                                "トラッキングを一時停止しました"
+                            } else {
+                                "トラッキングを再開しました"
+                            },
+                        );
+                    }
                 }
-
-                ui.label(
-                    RichText::new("The real calibration will be driven by the server.")
-                        .small()
-                        .color(theme::MUTED),
-                );
-            });
-        });
-    }
-
-    fn settings_view(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Settings");
-        ui.label(
-            RichText::new("Local mock settings. Nothing here talks to the server yet.")
-                .color(theme::MUTED),
-        );
-        ui.add_space(12.0);
-
-        theme::card(ui, |ui| {
-            ui.set_min_width(620.0);
-            egui::Grid::new("settings_grid")
-                .num_columns(2)
-                .spacing([28.0, 14.0])
-                .show(ui, |ui| {
-                    ui.label("Server port");
-                    ui.add(egui::DragValue::new(&mut self.settings.port).range(1024..=65535));
-                    ui.end_row();
-
-                    ui.label("OSC trackers");
-                    ui.checkbox(&mut self.settings.osc, "Enable OSC output");
-                    ui.end_row();
-
-                    ui.label("VMC");
-                    ui.checkbox(&mut self.settings.vmc, "Enable VMC sender");
-                    ui.end_row();
-
-                    ui.label("SteamVR");
-                    ui.checkbox(&mut self.settings.steamvr, "Start OpenVR driver");
-                    ui.end_row();
-
-                    ui.label("Auto-bone");
-                    ui.checkbox(&mut self.settings.auto_bone, "Calculate bone lengths");
-                    ui.end_row();
-
-                    ui.label("Smoothing");
-                    ui.add(
-                        egui::Slider::new(&mut self.settings.smoothing, 0.0..=1.0).show_value(true),
+                ServerEvent::Skeleton(skeleton) => {
+                    self.skeleton = skeleton;
+                }
+                ServerEvent::Checklist(checklist) => {
+                    self.checklist = checklist;
+                }
+                ServerEvent::ServerInfos { local_ip } => {
+                    self.local_ip = Some(local_ip);
+                }
+                ServerEvent::MagToggle { key, enabled } => {
+                    self.toast(
+                        Severity::Info,
+                        format!(
+                            "{} の磁気補正: {}",
+                            key.label(),
+                            if enabled { "有効" } else { "無効" }
+                        ),
                     );
-                    ui.end_row();
-                });
-
-            ui.add_space(10.0);
-            ui.horizontal(|ui| {
-                if ui.button("Reset defaults").clicked() {
-                    self.settings = Settings::default();
                 }
-                ui.label(
-                    RichText::new("settings are not persisted")
-                        .small()
-                        .color(theme::MUTED),
-                );
-            });
-        });
-    }
-
-    fn content(&mut self, ui: &mut egui::Ui) {
-        match self.tab {
-            Tab::Dashboard => self.dashboard(ui),
-            Tab::Trackers => self.trackers_view(ui),
-            Tab::Calibration => self.calibration_view(ui),
-            Tab::Settings => self.settings_view(ui),
+                ServerEvent::VrcConfig(vrc) => {
+                    self.vrc = Some(vrc);
+                }
+                ServerEvent::AutoBone(status) => {
+                    self.autobone = Some(status);
+                }
+                ServerEvent::UserHeight(status) => {
+                    let finished = status.status == 2;
+                    self.user_height = Some(status);
+                    if finished {
+                        self.toast(Severity::Success, "身長キャリブレーション完了");
+                    }
+                }
+                ServerEvent::SerialUpdate {
+                    log,
+                    closed,
+                    device,
+                } => {
+                    self.serial.log.extend(log);
+                    if closed {
+                        self.serial.open = false;
+                        self.serial.device = None;
+                        self.toast(Severity::Info, "シリアル接続を閉じました");
+                    }
+                    if device.is_some() {
+                        self.serial.device = device;
+                    }
+                    let excess = self.serial.log.len().saturating_sub(2000);
+                    if excess > 0 {
+                        self.serial.log.drain(..excess);
+                    }
+                }
+                ServerEvent::WifiProvisioning(status) => {
+                    self.serial.provisioning_status = Some(status);
+                }
+                ServerEvent::InstalledInfo {
+                    udev_installed,
+                    wayland,
+                } => {
+                    self.installed_info = Some((udev_installed, wayland));
+                }
+                ServerEvent::FirmwareUpdate {
+                    progress,
+                    status,
+                    device,
+                } => {
+                    let key = device.unwrap_or_else(|| "不明".to_string());
+                    self.firmware.progress.insert(key, (progress, status));
+                }
+                ServerEvent::NewSerialDevice { port, name, kind } => {
+                    self.serial.devices.retain(|entry| entry.0 != port);
+                    self.serial.devices.push((port, name, kind));
+                }
+                ServerEvent::UnknownRpc(kind) => {
+                    log::trace!("unhandled RPC message type {kind}");
+                }
+                ServerEvent::Malformed(error) => {
+                    log::warn!("malformed frame: {error}");
+                    self.toast(Severity::Warning, format!("不正なフレーム: {error}"));
+                }
+            }
         }
     }
+
+    // -- actions used by the pages ----------------------------------------
+
+    pub fn assign_tracker(&mut self, key: TrackerKey, body_part: u8, name: Option<String>) {
+        let drift = self
+            .all_trackers()
+            .iter()
+            .find(|tracker| tracker.key == key)
+            .filter(|tracker| tracker.is_imu)
+            .map(|tracker| tracker.allow_drift_compensation)
+            .unwrap_or(false);
+        let frame = crate::proto::assign_tracker(
+            key,
+            body_part,
+            name.as_deref().filter(|name| !name.is_empty()),
+            drift,
+        );
+        let label = if body_part == 0 {
+            "割り当て解除".to_string()
+        } else {
+            format!("割り当て ({})", body_part_label(body_part))
+        };
+        self.send_frame(frame, &label);
+    }
+
+    pub fn forget_device(&mut self, device_id: u8) {
+        let Some(device) = self.devices.iter().find(|device| device.id == device_id) else {
+            return;
+        };
+        let Some(mac) = device.mac_address.map(format_mac) else {
+            self.toast(
+                Severity::Warning,
+                "MAC アドレスが取得できないため削除できません",
+            );
+            return;
+        };
+        let frame = crate::proto::forget_device(&mac);
+        self.send_frame(frame, &format!("デバイス削除 ({mac})"));
+    }
+
+    pub fn start_reset(&mut self, reset_type: ResetType, body_parts: &[u8]) {
+        let allowed = match reset_type {
+            ResetType::Yaw => self.guards.can_do_yaw_reset,
+            ResetType::Full => true,
+            ResetType::Mounting => self.guards.can_do_mounting,
+        };
+        if !allowed {
+            self.toast(
+                Severity::Warning,
+                format!("{} は現在実行できません", reset_type.label()),
+            );
+            return;
+        }
+        let frame = crate::proto::reset(reset_type, body_parts);
+        self.send_frame(frame, reset_type.label());
+    }
+
+    pub fn set_paused(&mut self, paused: bool) {
+        let frame = crate::proto::set_pause_tracking(paused);
+        self.send_frame(frame, "トラッキング一時停止");
+    }
+
+    pub fn save_config(&mut self) {
+        self.config.server_url = self.conn.url().to_string();
+        self.config.ui_scale = self.ui_scale;
+        self.config.save();
+    }
+
+    /// Close the window after `after` so CI can run the binary as a smoke test.
+    pub fn arm_smoke_test(&mut self, after: Duration) {
+        self.smoke_deadline = Some(Instant::now() + after);
+    }
+}
+
+fn chrono_like_stamp() -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    let seconds = now.as_secs();
+    let millis = now.subsec_millis();
+    format!("{}.{:03}", seconds % 100_000, millis)
 }
 
 impl eframe::App for SlimeVrApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let dt = ui.ctx().input(|input| input.stable_dt).min(0.1);
-        self.server.tick(dt);
-        self.calibration.tick(dt);
+        let ctx = ui.ctx().clone();
+        let now = Instant::now();
+        self.frame_times
+            .retain(|time| now.duration_since(*time) < Duration::from_secs(2));
+        self.frame_times.push(now);
 
-        self.top_bar(ui);
-        self.nav(ui);
-        self.bottom_bar(ui);
+        let previous_scale = self.ui_scale;
+        ctx.set_pixels_per_point(self.ui_scale);
 
-        egui::CentralPanel::default()
-            .frame(
-                egui::Frame::new()
-                    .fill(theme::BG)
-                    .inner_margin(egui::Margin::same(20)),
-            )
-            .show(ui, |ui| {
-                self.content(ui);
-            });
+        self.server.drain_logs();
+        let events = self.conn.poll(&ctx);
+        self.apply_events(events);
+        self.toasts
+            .retain(|toast| toast.created.elapsed() < Duration::from_secs(6));
+
+        // Re-request settings once in a while so a GUI started before the server
+        // still converges without the user touching anything.
+        if self.conn.state() == ConnState::Connected
+            && self.last_settings_request.elapsed() > Duration::from_secs(30)
+        {
+            self.request_settings();
+        }
+
+        egui::Panel::top("header").show(ui, |ui| ui::header(self, ui));
+        egui::Panel::left("nav")
+            .resizable(false)
+            .exact_size(168.0)
+            .show(ui, |ui| ui::nav(self, ui));
+        egui::Panel::bottom("footer").show(ui, |ui| ui::footer(self, ui));
+
+        egui::CentralPanel::default().show(ui, |ui| match self.page {
+            Page::Dashboard => ui::dashboard::show(self, ui),
+            Page::Trackers => ui::trackers::show(self, ui),
+            Page::Reset => ui::reset::show(self, ui),
+            Page::Proportions => ui::proportions::show(self, ui),
+            Page::Checklist => ui::checklist::show(self, ui),
+            Page::Settings => ui::settings::show(self, ui),
+            Page::Console => ui::console::show(self, ui),
+            Page::Server => ui::server::show(self, ui),
+        });
+
+        if self.ui_scale != previous_scale {
+            self.config.ui_scale = self.ui_scale;
+            self.save_config();
+        }
+
+        if self.smoke_test {
+            // Give the socket a moment, then exit successfully.
+            ctx.request_repaint_after(Duration::from_millis(50));
+        } else {
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
 
         if let Some(deadline) = self.smoke_deadline {
             if Instant::now() >= deadline {
                 self.smoke_deadline = None;
                 println!("smoke-ok");
-                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             } else {
-                ui.ctx().request_repaint();
+                ctx.request_repaint();
             }
         }
     }
 }
 
-fn stat_card(ui: &mut egui::Ui, label: &str, value: &str, color: Color32) {
-    theme::card(ui, |ui| {
-        ui.set_min_width(150.0);
-        ui.label(RichText::new(label).small().color(theme::MUTED));
-        ui.label(RichText::new(value).size(24.0).strong().color(color));
-    });
+/// Convenience for pages that need to know whether the server link is usable.
+pub fn connected(app: &SlimeVrApp) -> bool {
+    app.conn.state() == ConnState::Connected
 }
 
-fn tracker_card(ui: &mut egui::Ui, tracker: &Tracker) {
-    theme::card(ui, |ui| {
-        ui.set_min_width(250.0);
-        ui.horizontal(|ui| {
-            ui.label(
-                RichText::new(tracker.name)
-                    .size(16.0)
-                    .strong()
-                    .color(theme::TEXT),
-            );
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let color = theme::status_color(tracker.status.label());
-                ui.label(RichText::new("●").color(color));
-            });
-        });
-        ui.label(RichText::new(tracker.role).small().color(theme::MUTED));
-        ui.add_space(6.0);
-
-        ui.add(
-            egui::ProgressBar::new(f32::from(tracker.battery) / 100.0)
-                .desired_width(210.0)
-                .fill(theme::battery_color(tracker.battery))
-                .text(RichText::new(format!("{}%", tracker.battery)).small()),
-        );
-
-        ui.horizontal(|ui| {
-            ui.label(
-                RichText::new(format!("{} dBm", tracker.rssi))
-                    .small()
-                    .color(theme::MUTED),
-            );
-            ui.label(
-                RichText::new(format!("{} TPS", tracker.tps))
-                    .small()
-                    .color(theme::MUTED),
-            );
-        });
-    });
+pub fn port_status_text() -> String {
+    if port_is_free(21110) {
+        "空き".to_string()
+    } else {
+        "使用中".to_string()
+    }
 }

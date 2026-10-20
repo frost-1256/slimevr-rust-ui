@@ -1,0 +1,11 @@
+IPAexGothic (assets/fonts/ipaexg.ttf)
+
+Copyright (c) 2010-2024, Information-technology Promotion Agency, Japan (IPA).
+This font is used unmodified and is redistributed under the
+IPA Font License Agreement v1.0.
+
+Full license text (authoritative): https://moji.or.jp/ipafont/license/
+IPAexFont distribution page:    https://moji.or.jp/ipafont/ipaexfont/
+
+The font is embedded into the executable (via include_bytes!) as a fallback
+typeface so that Japanese text renders on systems without Japanese fonts.

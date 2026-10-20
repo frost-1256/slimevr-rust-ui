@@ -14,6 +14,8 @@ pub const WARN: Color32 = Color32::from_rgb(250, 204, 21);
 pub const ERROR: Color32 = Color32::from_rgb(248, 113, 113);
 
 pub fn apply(ctx: &egui::Context) {
+    install_fonts(ctx);
+
     let mut visuals = egui::Visuals::dark();
     visuals.panel_fill = BG;
     visuals.window_fill = SURFACE;
@@ -40,22 +42,14 @@ pub fn apply(ctx: &egui::Context) {
     });
 }
 
-pub fn card(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
+pub fn card<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     egui::Frame::new()
         .fill(SURFACE)
         .stroke(Stroke::new(1.0, BORDER))
         .corner_radius(egui::CornerRadius::same(8))
         .inner_margin(egui::Margin::same(14))
-        .show(ui, add);
-}
-
-pub fn status_color(text: &str) -> Color32 {
-    match text {
-        "Online" => OK,
-        "Charging" => ACCENT,
-        "Disconnected" => ERROR,
-        _ => MUTED,
-    }
+        .show(ui, add)
+        .inner
 }
 
 pub fn battery_color(battery: u8) -> Color32 {
@@ -64,4 +58,24 @@ pub fn battery_color(battery: u8) -> Color32 {
         25..=59 => WARN,
         _ => ERROR,
     }
+}
+
+/// Japanese-capable fallback font. The default egui fonts cover Latin and
+/// emoji only, so every Japanese label would otherwise render as tofu.
+const JP_FONT: &[u8] = include_bytes!("../assets/fonts/ipaexg.ttf");
+
+fn install_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+    fonts.font_data.insert(
+        "ipaexg".to_owned(),
+        egui::FontData::from_static(JP_FONT).into(),
+    );
+    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+        fonts
+            .families
+            .entry(family)
+            .or_default()
+            .push("ipaexg".to_owned());
+    }
+    ctx.set_fonts(fonts);
 }
