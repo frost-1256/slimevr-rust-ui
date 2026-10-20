@@ -41,7 +41,7 @@ pub fn show(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
             theme::card(ui, |ui| {
                 ui.horizontal(|ui| {
                     let (mark, color) = if step.valid {
-                        ("✔", theme::OK)
+                        ("●", theme::OK)
                     } else if step.ignored {
                         ("—", theme::MUTED)
                     } else {

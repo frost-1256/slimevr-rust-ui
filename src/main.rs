@@ -34,7 +34,7 @@ fn main() -> Result<(), eframe::Error> {
         Box::new(move |cc| {
             let mut app = app::SlimeVrApp::new(cc, smoke_test);
             if smoke_test {
-                app.arm_smoke_test(Duration::from_secs(3));
+                app.arm_smoke_test(Duration::from_millis(2600));
             }
             Ok(Box::new(app))
         }),

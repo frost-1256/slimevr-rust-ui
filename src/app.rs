@@ -118,6 +118,7 @@ pub struct SlimeVrApp {
     frame_times: Vec<Instant>,
     pub smoke_test: bool,
     pub smoke_deadline: Option<Instant>,
+    smoke_page_timer: Instant,
     pub show_help: bool,
     pub ui_scale: f32,
     pub last_settings_request: Instant,
@@ -179,6 +180,7 @@ impl SlimeVrApp {
             frame_times: Vec::new(),
             smoke_test,
             smoke_deadline: None,
+            smoke_page_timer: Instant::now(),
             show_help: false,
             ui_scale,
             last_settings_request: Instant::now(),
@@ -559,6 +561,17 @@ impl eframe::App for SlimeVrApp {
         }
 
         if self.smoke_test {
+            // Walk every page so a headless CI run lays out all widgets and
+            // surfaces missing glyphs or panics that only appear off-dashboard.
+            if self.smoke_page_timer.elapsed() >= Duration::from_millis(280) {
+                self.smoke_page_timer = Instant::now();
+                let index = Page::ALL
+                    .iter()
+                    .position(|(page, _)| *page == self.page)
+                    .unwrap_or(0);
+                self.page = Page::ALL[(index + 1) % Page::ALL.len()].0;
+                log::info!("smoke page: {}", self.page.label());
+            }
             // Give the socket a moment, then exit successfully.
             ctx.request_repaint_after(Duration::from_millis(50));
         } else {

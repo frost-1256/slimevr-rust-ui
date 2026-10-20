@@ -678,7 +678,7 @@ fn decode_vrc_config(response: &sp::rpc::VRCConfigStateChangeResponse<'_>) -> Vr
 
 fn yes_no(value: bool) -> String {
     if value {
-        "✓".to_string()
+        "はい".to_string()
     } else {
         "✗".to_string()
     }
