@@ -75,7 +75,7 @@ jobs:
         with:
           # Frozen so a UI release always ships the server it was tested with.
           repository: frost-1256/SlimeVR-Server
-          ref: 7fb841a62adc1f0bd206515786c48316914cca24
+          ref: 6c12cb8c4a3dff2f67be66007dfe0d7c256ec6eb
           path: server-src
 
       # :solarxr-protocol has no variants without its sources, so shadowJar
