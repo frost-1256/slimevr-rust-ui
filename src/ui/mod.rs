@@ -1,6 +1,7 @@
 pub mod checklist;
 pub mod console;
 pub mod dashboard;
+pub mod log;
 pub mod proportions;
 pub mod reset;
 pub mod server;

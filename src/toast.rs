@@ -2,12 +2,24 @@
 
 use std::time::{Duration, Instant};
 
+use crate::ui::log::{LogEntry, LogLevel};
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Severity {
     Info,
     Success,
     Warning,
     Error,
+}
+
+impl From<Severity> for LogLevel {
+    fn from(severity: Severity) -> Self {
+        match severity {
+            Severity::Info | Severity::Success => Self::Info,
+            Severity::Warning => Self::Warning,
+            Severity::Error => Self::Error,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -23,14 +35,17 @@ pub struct Toast {
 #[derive(Default, Debug)]
 pub struct ToastCenter {
     pub toasts: Vec<Toast>,
-    log: Vec<String>,
+    log: Vec<LogEntry>,
 }
 
 impl ToastCenter {
     pub fn push(&mut self, severity: Severity, text: impl Into<String>) {
         let text = text.into();
         log::info!("{text}");
-        self.log.push(format!("[{}] {text}", timestamp()));
+        self.log.push(LogEntry {
+            level: severity.into(),
+            text: format!("[{}] {text}", timestamp()),
+        });
         let excess = self.log.len().saturating_sub(500);
         if excess > 0 {
             self.log.drain(..excess);
@@ -55,7 +70,7 @@ impl ToastCenter {
         }
     }
 
-    pub fn log(&self) -> &[String] {
+    pub fn log(&self) -> &[LogEntry] {
         &self.log
     }
 }

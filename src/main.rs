@@ -13,6 +13,7 @@ mod page;
 mod proto;
 mod server;
 mod smoke;
+mod steamvr;
 mod theme;
 mod toast;
 mod ui;
@@ -102,7 +103,7 @@ fn start_server_check() -> i32 {
         eprintln!("  {error}");
     }
     for line in &server.logs {
-        eprintln!("  {line}");
+        eprintln!("  {}", line.text);
     }
     server.shutdown();
     1

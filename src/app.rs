@@ -56,6 +56,11 @@ pub struct SlimeVrApp {
     pub autobone: Option<AutoBoneStatus>,
     pub user_height: Option<UserHeightStatus>,
     pub installed_info: Option<(bool, bool)>,
+    /// Last SteamVR driver inspection; `None` until checked or while a recheck is due.
+    pub steamvr: Option<crate::steamvr::DriverStatus>,
+    steamvr_recheck: Option<Instant>,
+    pub server_log_filter: crate::ui::log::LevelFilter,
+    pub gui_log_filter: crate::ui::log::LevelFilter,
     pub serial: SerialState,
     pub firmware: FirmwareState,
 
@@ -120,6 +125,10 @@ impl SlimeVrApp {
             autobone: None,
             user_height: None,
             installed_info: None,
+            steamvr: None,
+            steamvr_recheck: None,
+            server_log_filter: Default::default(),
+            gui_log_filter: Default::default(),
             serial: SerialState::default(),
             firmware: FirmwareState::default(),
             drafts: Default::default(),
@@ -163,6 +172,22 @@ impl SlimeVrApp {
 
     pub fn toast(&mut self, severity: Severity, text: impl Into<String>) {
         self.notices.push(severity, text);
+    }
+
+    /// Re-reads the OpenVR driver registry and caches the result.
+    pub fn refresh_steamvr(&mut self) {
+        self.steamvr = Some(crate::steamvr::check());
+        self.steamvr_recheck = None;
+    }
+
+    /// Checks again shortly after asking the server to register the driver.
+    pub fn schedule_steamvr_recheck(&mut self) {
+        self.steamvr_recheck = Some(Instant::now() + Duration::from_secs(2));
+    }
+
+    fn steamvr_recheck_due(&self) -> bool {
+        self.steamvr_recheck
+            .is_some_and(|deadline| Instant::now() >= deadline)
     }
 
     /// Physical trackers reported by the data feed. Computed (synthetic)
@@ -393,6 +418,9 @@ impl eframe::App for SlimeVrApp {
 
         self.poll_server();
         self.port.refresh();
+        if self.steamvr_recheck_due() {
+            self.refresh_steamvr();
+        }
         if self.server.is_busy() {
             ctx.request_repaint_after(Duration::from_millis(60));
         }

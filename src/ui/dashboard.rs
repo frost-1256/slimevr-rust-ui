@@ -263,8 +263,16 @@ fn events(app: &SlimeVrApp, ui: &mut egui::Ui) {
             .max_height(160.0)
             .stick_to_bottom(true)
             .show(ui, |ui| {
-                for line in app.notices.log() {
-                    ui.label(RichText::new(line).small().monospace());
+                for entry in app.notices.log() {
+                    let mut text = RichText::new(&entry.text).small().monospace();
+                    if let Some(color) = entry.level.color() {
+                        text = text.color(color);
+                    }
+                    ui.add(
+                        egui::Label::new(text)
+                            .selectable(true)
+                            .wrap_mode(egui::TextWrapMode::Wrap),
+                    );
                 }
             });
     });

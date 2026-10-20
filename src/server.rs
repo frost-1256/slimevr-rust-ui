@@ -11,6 +11,8 @@ use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant};
 
+use crate::ui::log::LogEntry;
+
 /// Where the supervisor currently is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
@@ -37,7 +39,7 @@ pub struct ServerProcess {
     event_rx: Option<Receiver<Event>>,
     worker: Option<std::thread::JoinHandle<()>>,
     state: State,
-    pub logs: Vec<String>,
+    pub logs: Vec<LogEntry>,
     pub jar: Option<PathBuf>,
     pub java: Option<PathBuf>,
     pub last_error: Option<String>,
@@ -103,7 +105,7 @@ impl ServerProcess {
     }
 
     fn push_log(&mut self, line: String) {
-        self.logs.push(line);
+        self.logs.push(LogEntry::parse(line));
         let excess = self.logs.len().saturating_sub(2000);
         if excess > 0 {
             self.logs.drain(..excess);

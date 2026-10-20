@@ -199,21 +199,35 @@ fn connection_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
 
 /// SteamVR 連携 (ドライバ有効化とインストール状態)。
 fn steamvr_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
+    if app.steamvr.is_none() {
+        app.refresh_steamvr();
+    }
+
     let mut frames: Vec<(&'static str, Vec<u8>)> = Vec::new();
+    let mut recheck = false;
     ui::section(ui, "SteamVR 連携", |ui| {
         ui.horizontal(|ui| {
             if ui
                 .add(theme::outlined_button("SteamVR ドライバを有効化"))
-                .on_hover_text("ドライバ登録と SteamVR 設定の書き込みを行います")
+                .on_hover_text("サーバーにドライバ登録を要求します (SteamVR の vrpathreg を使用)")
                 .clicked()
             {
                 frames.push((
                     "SteamVR ドライバ有効化",
                     crate::proto::enable_steamvr_driver(),
                 ));
+                recheck = true;
             }
             if ui
-                .add(theme::text_button("インストール情報を取得"))
+                .add(theme::text_button("状態を再確認"))
+                .on_hover_text("OpenVR のドライバ登録情報 (openvrpaths.vrpath) を読み直します")
+                .clicked()
+            {
+                recheck = true;
+            }
+            if ui
+                .add(theme::text_button("Linux 情報"))
+                .on_hover_text("udev ルールと Wayland をサーバーに問い合わせます")
                 .clicked()
             {
                 frames.push((
@@ -222,33 +236,72 @@ fn steamvr_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
                 ));
             }
         });
-        match app.installed_info {
-            Some((udev, wayland)) => {
-                ui.label(format!(
-                    "udev ルール: {}",
-                    if udev {
-                        "インストール済み"
-                    } else {
-                        "未インストール"
-                    }
-                ));
-                ui.label(format!(
-                    "セッション: {}",
+
+        ui.add_space(6.0);
+        driver_status(ui, app.steamvr.as_ref());
+
+        if let Some((udev, wayland)) = app.installed_info {
+            ui.add_space(4.0);
+            ui.label(
+                RichText::new(format!(
+                    "udev: {} / セッション: {}",
+                    if udev { "済み" } else { "未設定" },
                     if wayland { "Wayland" } else { "X11" }
-                ));
-            }
-            None => {
-                ui.label(
-                    RichText::new("インストール情報は未取得です")
-                        .small()
-                        .color(theme::MUTED),
-                );
-            }
+                ))
+                .small()
+                .color(theme::MUTED),
+            );
         }
     });
 
+    if recheck {
+        app.refresh_steamvr();
+        app.schedule_steamvr_recheck();
+    }
     for (label, frame) in frames {
         app.send_frame(frame, label);
+    }
+}
+
+/// One status line plus the registered driver path.
+fn driver_status(ui: &mut egui::Ui, status: Option<&crate::steamvr::DriverStatus>) {
+    use crate::steamvr::DriverStatus;
+
+    let (text, color) = match status {
+        None => ("確認中…".to_string(), theme::MUTED),
+        Some(DriverStatus::SteamVrNotFound) => (
+            "SteamVR 未検出 (openvrpaths.vrpath がありません)".to_string(),
+            theme::WARN,
+        ),
+        Some(DriverStatus::NotRegistered) => {
+            ("SlimeVR ドライバは未登録です".to_string(), theme::ERROR)
+        }
+        Some(DriverStatus::Registered {
+            binary: Some(_), ..
+        }) => ("SlimeVR ドライバは登録済みです".to_string(), theme::OK),
+        Some(DriverStatus::Registered { binary: None, .. }) => (
+            "登録済みですが driver_slimevr が見つかりません".to_string(),
+            theme::WARN,
+        ),
+        Some(DriverStatus::Error(error)) => (format!("確認エラー: {error}"), theme::ERROR),
+    };
+    ui.label(RichText::new(text).color(color));
+
+    if let Some(DriverStatus::Registered { dir, binary }) = status {
+        ui.label(
+            RichText::new(dir.display().to_string())
+                .monospace()
+                .small()
+                .color(theme::MUTED),
+        );
+        if let Some(binary) = binary {
+            ui.label(
+                RichText::new(binary.display().to_string())
+                    .monospace()
+                    .small()
+                    .color(theme::MUTED),
+            );
+        }
     }
 }
 
@@ -325,21 +378,14 @@ fn process_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
         });
 
         ui.add_space(6.0);
-        egui::ScrollArea::vertical()
-            .id_salt("server-stdout")
-            .max_height(240.0)
-            .stick_to_bottom(true)
-            .show(ui, |ui| {
-                let text = if app.server.logs.is_empty() {
-                    "サーバーログはありません".to_string()
-                } else {
-                    app.server.logs.join("\n")
-                };
-                ui.add(
-                    egui::Label::new(RichText::new(text).monospace().small())
-                        .wrap_mode(egui::TextWrapMode::Wrap),
-                );
-            });
+        crate::ui::log::show(
+            ui,
+            "server-stdout",
+            &app.server.logs,
+            &mut app.server_log_filter,
+            240.0,
+            "サーバーログはありません",
+        );
     });
 
     for frame in frames.drain(..) {
@@ -349,26 +395,13 @@ fn process_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
 
 fn client_log_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
     ui::section(ui, "GUI イベントログ", |ui| {
-        egui::ScrollArea::vertical()
-            .id_salt("client-log")
-            .max_height(560.0)
-            .stick_to_bottom(true)
-            .show(ui, |ui| {
-                let text = if app.notices.log().is_empty() {
-                    "まだイベントはありません".to_string()
-                } else {
-                    app.notices
-                        .log()
-                        .iter()
-                        .rev()
-                        .cloned()
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                };
-                ui.add(
-                    egui::Label::new(RichText::new(text).monospace().small())
-                        .wrap_mode(egui::TextWrapMode::Wrap),
-                );
-            });
+        crate::ui::log::show(
+            ui,
+            "client-log",
+            app.notices.log(),
+            &mut app.gui_log_filter,
+            560.0,
+            "まだイベントはありません",
+        );
     });
 }
