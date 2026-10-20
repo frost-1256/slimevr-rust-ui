@@ -1,6 +1,6 @@
 use eframe::egui::{self, RichText};
 
-use crate::app::{SlimeVrApp, port_status_text};
+use crate::app::SlimeVrApp;
 use crate::config;
 use crate::net::ConnState;
 use crate::theme;
@@ -156,14 +156,11 @@ fn connection_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
         });
         ui.horizontal(|ui| {
             ui.label("サーバーポート 21110:");
-            let free = port_status_text();
-            ui.label(RichText::new(&free).color(if free == "空き" {
-                theme::MUTED
-            } else {
-                theme::OK
-            }));
+            let in_use = app.port.in_use();
+            let text = if in_use { "使用中" } else { "空き" };
+            ui.label(RichText::new(text).color(if in_use { theme::OK } else { theme::MUTED }));
             if ui.add(theme::text_button("確認")).clicked() {
-                ui.ctx().request_repaint();
+                app.port.check();
             }
         });
         if let Some(ip) = &app.local_ip {
@@ -357,10 +354,11 @@ fn client_log_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
             .max_height(560.0)
             .stick_to_bottom(true)
             .show(ui, |ui| {
-                let text = if app.event_log.is_empty() {
+                let text = if app.notices.log().is_empty() {
                     "まだイベントはありません".to_string()
                 } else {
-                    app.event_log
+                    app.notices
+                        .log()
                         .iter()
                         .rev()
                         .cloned()

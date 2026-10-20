@@ -235,7 +235,7 @@ fn tracker_overview(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
                 for (key, name, body_part, status, tps) in trackers {
                     if ui.selectable_label(false, name).clicked() {
                         app.selected = Some(key);
-                        app.page = crate::app::Page::Trackers;
+                        app.page = crate::page::Page::Trackers;
                     }
                     ui.label(if body_part == 0 {
                         RichText::new("未割当").color(theme::MUTED)
@@ -255,7 +255,7 @@ fn tracker_overview(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
 
 fn events(app: &SlimeVrApp, ui: &mut egui::Ui) {
     ui::section(ui, "イベントログ", |ui| {
-        if app.event_log.is_empty() {
+        if app.notices.log().is_empty() {
             ui.label(RichText::new("まだイベントはありません").color(theme::MUTED));
             return;
         }
@@ -263,7 +263,7 @@ fn events(app: &SlimeVrApp, ui: &mut egui::Ui) {
             .max_height(160.0)
             .stick_to_bottom(true)
             .show(ui, |ui| {
-                for line in &app.event_log {
+                for line in app.notices.log() {
                     ui.label(RichText::new(line).small().monospace());
                 }
             });

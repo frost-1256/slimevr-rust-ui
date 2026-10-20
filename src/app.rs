@@ -8,70 +8,11 @@ use eframe::egui;
 use crate::config::LocalConfig;
 use crate::model::*;
 use crate::net::{ConnState, Connection};
-use crate::server::{ServerProcess, format_mac, port_is_free};
+use crate::page::Page;
+use crate::server::{PortProbe, ServerProcess, format_mac};
+use crate::smoke::SmokeState;
+use crate::toast::{Severity, ToastCenter};
 use crate::ui;
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Page {
-    Dashboard,
-    Trackers,
-    Reset,
-    Proportions,
-    Checklist,
-    Settings,
-    Console,
-    Server,
-}
-
-impl Page {
-    pub const ALL: [(Page, &'static str); 8] = [
-        (Page::Dashboard, "ダッシュボード"),
-        (Page::Trackers, "トラッカー"),
-        (Page::Reset, "リセット"),
-        (Page::Proportions, "プロポーション"),
-        (Page::Checklist, "チェックリスト"),
-        (Page::Settings, "設定"),
-        (Page::Console, "シリアル / FW"),
-        (Page::Server, "サーバー"),
-    ];
-
-    pub fn label(self) -> &'static str {
-        Self::ALL
-            .iter()
-            .find(|(page, _)| *page == self)
-            .map(|(_, label)| *label)
-            .unwrap_or("?")
-    }
-
-    /// Material Symbols name, matching `Page::ALL` order.
-    pub fn icon(self) -> &'static str {
-        match self {
-            Page::Dashboard => "dashboard",
-            Page::Trackers => "sensors",
-            Page::Reset => "restart_alt",
-            Page::Proportions => "straighten",
-            Page::Checklist => "checklist",
-            Page::Settings => "settings",
-            Page::Console => "terminal",
-            Page::Server => "dns",
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Toast {
-    pub text: String,
-    pub severity: Severity,
-    pub created: Instant,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Severity {
-    Info,
-    Success,
-    Warning,
-    Error,
-}
 
 #[derive(Default, Debug, Clone)]
 pub struct SerialState {
@@ -98,6 +39,7 @@ pub struct SlimeVrApp {
     pub conn: Connection,
     pub config: LocalConfig,
     pub server: ServerProcess,
+    pub port: PortProbe,
     pub page: Page,
 
     pub devices: Vec<Device>,
@@ -126,13 +68,10 @@ pub struct SlimeVrApp {
     pub forget_confirm: Option<(u8, Instant)>,
     pub reset_include_feet: bool,
     pub reset_include_fingers: bool,
-    pub toasts: Vec<Toast>,
-    pub event_log: Vec<String>,
+    pub notices: ToastCenter,
     /// Frame times of the last second, used for the footer stats line.
     frame_times: Vec<Instant>,
-    pub smoke_test: bool,
-    pub smoke_deadline: Option<Instant>,
-    smoke_page_timer: Instant,
+    pub smoke: SmokeState,
     pub show_help: bool,
     pub downloads: crate::download::Downloads,
     pub ui_scale: f32,
@@ -161,6 +100,7 @@ impl SlimeVrApp {
             conn: Connection::new(config.server_url.clone()),
             config,
             server,
+            port: PortProbe::default(),
             page: Page::Dashboard,
             devices: Vec::new(),
             synthetic: Vec::new(),
@@ -190,12 +130,9 @@ impl SlimeVrApp {
             forget_confirm: None,
             reset_include_feet: false,
             reset_include_fingers: false,
-            toasts: Vec::new(),
-            event_log: Vec::new(),
+            notices: ToastCenter::default(),
             frame_times: Vec::new(),
-            smoke_test,
-            smoke_deadline: None,
-            smoke_page_timer: Instant::now(),
+            smoke: SmokeState::new(smoke_test),
             show_help: false,
             downloads: crate::download::Downloads::default(),
             ui_scale,
@@ -215,7 +152,7 @@ impl SlimeVrApp {
             log::info!("自動起動: jar または Java が見つからないためスキップします");
             return;
         }
-        if !port_is_free(21110) {
+        if self.port.in_use() {
             log::info!("自動起動: ポート 21110 は既に使用中です。既存のサーバーに接続します");
             return;
         }
@@ -225,21 +162,7 @@ impl SlimeVrApp {
     // -- helpers -----------------------------------------------------------
 
     pub fn toast(&mut self, severity: Severity, text: impl Into<String>) {
-        let text = text.into();
-        log::info!("{text}");
-        self.event_log
-            .push(format!("[{}] {}", chrono_like_stamp(), text));
-        let excess = self.event_log.len().saturating_sub(500);
-        if excess > 0 {
-            self.event_log.drain(..excess);
-        }
-        if severity != Severity::Info {
-            self.toasts.push(Toast {
-                text,
-                severity,
-                created: Instant::now(),
-            });
-        }
+        self.notices.push(severity, text);
     }
 
     /// Physical trackers reported by the data feed. Computed (synthetic)
@@ -384,148 +307,6 @@ impl SlimeVrApp {
         }
     }
 
-    fn apply_events(&mut self, events: Vec<ServerEvent>) {
-        for event in events {
-            match event {
-                ServerEvent::Feed(feed) => {
-                    self.devices = feed.devices;
-                    self.synthetic = feed.synthetic;
-                    self.bones = feed.bones;
-                    if let Some(guards) = feed.guards {
-                        self.guards = guards;
-                    }
-                    if let Some(selected) = self.selected
-                        && !self
-                            .all_trackers()
-                            .iter()
-                            .any(|tracker| tracker.key == selected)
-                    {
-                        self.selected = None;
-                    }
-                }
-                ServerEvent::Settings(settings) => {
-                    self.settings.merge(settings);
-                    self.drafts.sync(&self.settings);
-                }
-                ServerEvent::Reset(reset) => {
-                    if reset.started {
-                        if let Some(existing) = self
-                            .resets
-                            .iter_mut()
-                            .find(|entry| entry.reset_type == reset.reset_type)
-                        {
-                            *existing = reset;
-                        } else {
-                            self.resets.push(reset);
-                        }
-                    } else {
-                        self.resets
-                            .retain(|entry| entry.reset_type != reset.reset_type);
-                        if let Some(reset_type) = reset.reset_type {
-                            self.toast(
-                                Severity::Success,
-                                format!("{} が完了しました", reset_type.label()),
-                            );
-                        }
-                    }
-                }
-                ServerEvent::PauseState(paused) => {
-                    let changed = self.paused != paused;
-                    self.paused = paused;
-                    if changed {
-                        self.toast(
-                            Severity::Info,
-                            if paused {
-                                "トラッキングを一時停止しました"
-                            } else {
-                                "トラッキングを再開しました"
-                            },
-                        );
-                    }
-                }
-                ServerEvent::Skeleton(skeleton) => {
-                    self.skeleton = skeleton;
-                }
-                ServerEvent::Checklist(checklist) => {
-                    self.checklist = checklist;
-                }
-                ServerEvent::ServerInfos { local_ip } => {
-                    self.local_ip = Some(local_ip);
-                }
-                ServerEvent::MagToggle { key, enabled } => {
-                    self.toast(
-                        Severity::Info,
-                        format!(
-                            "{} の磁気補正: {}",
-                            key.label(),
-                            if enabled { "有効" } else { "無効" }
-                        ),
-                    );
-                }
-                ServerEvent::VrcConfig(vrc) => {
-                    self.vrc = Some(vrc);
-                }
-                ServerEvent::AutoBone(status) => {
-                    self.autobone = Some(status);
-                }
-                ServerEvent::UserHeight(status) => {
-                    let finished = status.status == 2;
-                    self.user_height = Some(status);
-                    if finished {
-                        self.toast(Severity::Success, "身長キャリブレーション完了");
-                    }
-                }
-                ServerEvent::SerialUpdate {
-                    log,
-                    closed,
-                    device,
-                } => {
-                    self.serial.log.extend(log);
-                    if closed {
-                        self.serial.open = false;
-                        self.serial.device = None;
-                        self.toast(Severity::Info, "シリアル接続を閉じました");
-                    }
-                    if device.is_some() {
-                        self.serial.device = device;
-                    }
-                    let excess = self.serial.log.len().saturating_sub(2000);
-                    if excess > 0 {
-                        self.serial.log.drain(..excess);
-                    }
-                }
-                ServerEvent::WifiProvisioning(status) => {
-                    self.serial.provisioning_status = Some(status);
-                }
-                ServerEvent::InstalledInfo {
-                    udev_installed,
-                    wayland,
-                } => {
-                    self.installed_info = Some((udev_installed, wayland));
-                }
-                ServerEvent::FirmwareUpdate {
-                    progress,
-                    status,
-                    device,
-                } => {
-                    let key = device.unwrap_or_else(|| "不明".to_string());
-                    self.firmware.progress.insert(key, (progress, status));
-                }
-                ServerEvent::NewSerialDevice { port, name, kind } => {
-                    self.serial.devices.retain(|entry| entry.0 != port);
-                    self.serial.devices.push((port, name, kind));
-                }
-                ServerEvent::UnknownRpc(kind) => {
-                    log::trace!("unhandled RPC message type {kind}");
-                }
-                ServerEvent::Malformed(error) => {
-                    log::warn!("malformed frame: {error}");
-                    self.toast(Severity::Warning, format!("不正なフレーム: {error}"));
-                }
-            }
-        }
-    }
-
     // -- actions used by the pages ----------------------------------------
 
     pub fn assign_tracker(&mut self, key: TrackerKey, body_part: u8, name: Option<String>) {
@@ -592,20 +373,6 @@ impl SlimeVrApp {
         self.config.ui_scale = self.ui_scale;
         self.config.save();
     }
-
-    /// Close the window after `after` so CI can run the binary as a smoke test.
-    pub fn arm_smoke_test(&mut self, after: Duration) {
-        self.smoke_deadline = Some(Instant::now() + after);
-    }
-}
-
-fn chrono_like_stamp() -> String {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default();
-    let seconds = now.as_secs();
-    let millis = now.subsec_millis();
-    format!("{}.{:03}", seconds % 100_000, millis)
 }
 
 impl eframe::App for SlimeVrApp {
@@ -625,13 +392,13 @@ impl eframe::App for SlimeVrApp {
         }
 
         self.poll_server();
+        self.port.refresh();
         if self.server.is_busy() {
             ctx.request_repaint_after(Duration::from_millis(60));
         }
         let events = self.conn.poll(&ctx);
         self.apply_events(events);
-        self.toasts
-            .retain(|toast| toast.created.elapsed() < Duration::from_secs(6));
+        self.notices.expire();
         self.poll_downloads();
 
         // Re-request settings once in a while so a GUI started before the server
@@ -692,45 +459,11 @@ impl eframe::App for SlimeVrApp {
             ctx.request_repaint();
         }
 
-        if self.smoke_test {
-            // Walk every page so a headless CI run lays out all widgets and
-            // surfaces missing glyphs or panics that only appear off-dashboard.
-            if self.smoke_page_timer.elapsed() >= Duration::from_millis(280) {
-                self.smoke_page_timer = Instant::now();
-                let index = Page::ALL
-                    .iter()
-                    .position(|(page, _)| *page == self.page)
-                    .unwrap_or(0);
-                self.page = Page::ALL[(index + 1) % Page::ALL.len()].0;
-                log::info!("smoke page: {}", self.page.label());
-            }
-            // Give the socket a moment, then exit successfully.
-            ctx.request_repaint_after(Duration::from_millis(50));
-        } else {
-            ctx.request_repaint_after(Duration::from_millis(100));
-        }
-
-        if let Some(deadline) = self.smoke_deadline {
-            if Instant::now() >= deadline {
-                self.smoke_deadline = None;
-                println!("smoke-ok");
-                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-            } else {
-                ctx.request_repaint();
-            }
-        }
+        self.smoke.tick(&ctx, &mut self.page);
     }
 }
 
 /// Convenience for pages that need to know whether the server link is usable.
 pub fn connected(app: &SlimeVrApp) -> bool {
     app.conn.state() == ConnState::Connected
-}
-
-pub fn port_status_text() -> String {
-    if port_is_free(21110) {
-        "空き".to_string()
-    } else {
-        "使用中".to_string()
-    }
 }

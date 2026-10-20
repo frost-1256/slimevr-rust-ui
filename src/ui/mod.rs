@@ -9,10 +9,11 @@ pub mod trackers;
 
 use eframe::egui::{self, RichText};
 
-use crate::app::{Severity, SlimeVrApp};
+use crate::app::SlimeVrApp;
 use crate::model::TrackerStatus;
 use crate::net::ConnState;
 use crate::theme;
+use crate::toast::Severity;
 
 pub const CARD_MIN_WIDTH: f32 = 380.0;
 
@@ -84,11 +85,11 @@ pub fn header(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
         }
     });
 
-    if !app.toasts.is_empty() {
+    if !app.notices.toasts.is_empty() {
         ui.add_space(2.0);
         let mut dismiss = None;
         ui.horizontal_wrapped(|ui| {
-            for (index, toast) in app.toasts.iter().enumerate() {
+            for (index, toast) in app.notices.toasts.iter().enumerate() {
                 let color = match toast.severity {
                     Severity::Info => theme::TEXT,
                     Severity::Success => theme::OK,
@@ -113,7 +114,7 @@ pub fn header(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
             }
         });
         if let Some(index) = dismiss {
-            app.toasts.remove(index);
+            app.notices.dismiss(index);
         }
     }
 
@@ -180,7 +181,7 @@ pub fn server_summary(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
         server_status_line(ui, app);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui.add(theme::text_button("サーバー設定へ")).clicked() {
-                app.page = crate::app::Page::Server;
+                app.page = crate::page::Page::Server;
             }
         });
     });
@@ -191,7 +192,7 @@ pub fn server_summary(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
             && (app.server.jar.is_none() || app.server.java.is_none())
             && ui.add(theme::text_button("jar / Java を入手")).clicked()
         {
-            app.page = crate::app::Page::Server;
+            app.page = crate::page::Page::Server;
         }
     });
 }
@@ -225,9 +226,9 @@ pub fn nav(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
     });
     ui.add_space(2.0);
 
-    for (page, label) in crate::app::Page::ALL {
+    for (page, label) in crate::page::Page::ALL {
         let selected = app.page == page;
-        let badge = (page == crate::app::Page::Checklist)
+        let badge = (page == crate::page::Page::Checklist)
             .then(|| app.checklist.remaining())
             .filter(|remaining| *remaining > 0);
         if nav_item(ui, page.icon(), label, selected, badge) {

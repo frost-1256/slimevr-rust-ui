@@ -6,11 +6,15 @@
 mod app;
 mod config;
 mod download;
+mod events;
 mod model;
 mod net;
+mod page;
 mod proto;
 mod server;
+mod smoke;
 mod theme;
+mod toast;
 mod ui;
 
 use std::time::{Duration, Instant};
@@ -43,7 +47,7 @@ fn main() -> Result<(), eframe::Error> {
         Box::new(move |cc| {
             let mut app = app::SlimeVrApp::new(cc, smoke_test);
             if smoke_test {
-                app.arm_smoke_test(Duration::from_millis(2600));
+                app.smoke.arm(Duration::from_millis(2600));
             }
             Ok(Box::new(app))
         }),

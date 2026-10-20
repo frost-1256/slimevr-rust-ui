@@ -499,6 +499,41 @@ pub fn port_is_free(port: u16) -> bool {
     std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
 }
 
+/// Cached liveness of the server port. The server page used to bind the port
+/// on every repaint, which is a syscall per frame for a value that changes at
+/// human speed; this refreshes at most once a second.
+pub struct PortProbe {
+    in_use: bool,
+    checked: Instant,
+}
+
+impl Default for PortProbe {
+    fn default() -> Self {
+        Self {
+            in_use: !port_is_free(21110),
+            checked: Instant::now(),
+        }
+    }
+}
+
+impl PortProbe {
+    pub fn check(&mut self) {
+        self.in_use = !port_is_free(21110);
+        self.checked = Instant::now();
+    }
+
+    pub fn refresh(&mut self) {
+        if self.checked.elapsed() >= Duration::from_secs(1) {
+            self.in_use = !port_is_free(21110);
+            self.checked = Instant::now();
+        }
+    }
+
+    pub fn in_use(&self) -> bool {
+        self.in_use
+    }
+}
+
 /// Format a 48-bit hardware address as `AA:BB:CC:DD:EE:FF`.
 pub fn format_mac(addr: u64) -> String {
     let bytes = addr.to_be_bytes();
@@ -517,5 +552,22 @@ mod tests {
     fn formats_mac_address() {
         assert_eq!(format_mac(0x001122334455), "00:11:22:33:44:55");
         assert_eq!(format_mac(0x000000000000), "00:00:00:00:00:00");
+    }
+
+    /// The probe must follow a listener appearing and disappearing; a refresh
+    /// within the throttle window keeps the cached value.
+    #[test]
+    fn port_probe_tracks_listener() {
+        let Ok(listener) = std::net::TcpListener::bind(("127.0.0.1", 21110)) else {
+            // Something else owns the port on this machine; nothing to assert.
+            return;
+        };
+        let mut probe = PortProbe::default();
+        assert!(probe.in_use(), "bound port must read as in use");
+        probe.refresh();
+        assert!(probe.in_use(), "throttled refresh keeps the cached value");
+        drop(listener);
+        probe.check();
+        assert!(!probe.in_use(), "released port must read as free");
     }
 }
