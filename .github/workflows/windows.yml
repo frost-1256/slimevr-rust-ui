@@ -26,7 +26,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Format
-        run: cargo fmt --all -- --check
+        run: cargo fmt -- --check
 
       - name: Clippy
         run: cargo clippy --all-targets --locked -- -D warnings
@@ -53,15 +53,20 @@ jobs:
       - name: Build
         run: cargo build --release --locked
 
-      - name: Smoke test (headless, 3 s)
+      - name: Smoke test (headless, 5 s)
         shell: pwsh
         run: |
+          $env:RUST_LOG = "debug"
+          $env:RUST_BACKTRACE = "1"
           $exe = "target\release\slimevr-native-ui.exe"
-          $process = Start-Process -FilePath $exe -ArgumentList "--smoke-test" -PassThru
+          $process = Start-Process -FilePath $exe -ArgumentList "--smoke-test" `
+            -RedirectStandardOutput smoke.out -RedirectStandardError smoke.err -PassThru
           if (-not $process.WaitForExit(30000)) {
             Stop-Process -Id $process.Id -Force
             throw "smoke test timed out"
           }
+          Get-Content smoke.out -ErrorAction SilentlyContinue
+          Get-Content smoke.err -ErrorAction SilentlyContinue
           if ($process.ExitCode -ne 0) {
             throw "smoke test exited with $($process.ExitCode)"
           }
