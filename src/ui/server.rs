@@ -18,6 +18,7 @@ pub fn show(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
         if ui::two_columns(ui) {
             ui.columns(2, |columns| {
                 connection_card(&mut columns[0], app);
+                download_card(&mut columns[0], app);
                 steamvr_card(&mut columns[0], app);
                 process_card(&mut columns[0], app);
                 client_log_card(&mut columns[1], app);
@@ -25,12 +26,95 @@ pub fn show(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
         } else {
             connection_card(ui, app);
             ui.add_space(8.0);
+            download_card(ui, app);
+            ui.add_space(8.0);
             steamvr_card(ui, app);
             ui.add_space(8.0);
             process_card(ui, app);
             ui.add_space(8.0);
             client_log_card(ui, app);
         }
+    });
+}
+
+/// Fetch `slimevr.jar` and a JRE without leaving the app. Both land in the
+/// user data directory, where `ServerProcess::detect` picks them up.
+fn download_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
+    ui::section(ui, "ダウンロード", |ui| {
+        ui.label(
+            RichText::new(
+                "同梱されていない場合や最新版を使いたい場合に、サーバー本体と Java を取得できます。",
+            )
+            .small()
+            .color(theme::MUTED),
+        );
+        ui.add_space(6.0);
+
+        let jar_installed = crate::download::installed_jar().is_file();
+        let java_installed = crate::download::installed_java().is_dir();
+
+        for (kind, installed) in [
+            (crate::download::Kind::Server, jar_installed),
+            (crate::download::Kind::Java, java_installed),
+        ] {
+            let phase = app.downloads.job_mut(kind).phase.clone();
+            let busy = phase.is_busy();
+            let label = if busy {
+                format!("{} を取得中…", kind.label())
+            } else if installed {
+                format!("{} を再取得", kind.label())
+            } else {
+                format!("{} をダウンロード", kind.label())
+            };
+            let clicked = ui
+                .horizontal(|ui| {
+                    let response = ui.add_enabled(!busy, theme::outlined_button(label));
+                    if installed {
+                        ui.label(RichText::new("取得済み").small().color(theme::OK));
+                    }
+                    response.clicked()
+                })
+                .inner;
+            if clicked {
+                app.downloads.start(kind);
+            }
+
+            match &phase {
+                crate::download::Phase::Downloading { received, total } => {
+                    let text = match total {
+                        Some(total) => format!(
+                            "{:.1} / {:.1} MB",
+                            *received as f32 / 1_048_576.0,
+                            *total as f32 / 1_048_576.0
+                        ),
+                        None => format!("{:.1} MB", *received as f32 / 1_048_576.0),
+                    };
+                    let bar = match phase.progress_fraction() {
+                        Some(fraction) => egui::ProgressBar::new(fraction),
+                        None => egui::ProgressBar::new(0.0).animate(true),
+                    };
+                    ui.add(bar.text(text).desired_width(260.0));
+                }
+                crate::download::Phase::Unpacking => {
+                    ui.label(RichText::new("展開中…").small().color(theme::MUTED));
+                }
+                crate::download::Phase::Failed(error) => {
+                    ui.label(RichText::new(error).small().color(theme::ERROR));
+                }
+                _ => {}
+            }
+            ui.add_space(4.0);
+        }
+
+        ui.label(
+            RichText::new(format!(
+                "保存先: {}",
+                crate::download::install_root().display()
+            ))
+            .monospace()
+            .small()
+            .color(theme::MUTED),
+        );
     });
 }
 
@@ -64,7 +148,7 @@ fn connection_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
                     .desired_width(240.0)
                     .hint_text("ws://127.0.0.1:21110"),
             );
-            if ui.button("接続先を適用").clicked() {
+            if ui.add(theme::primary_button("接続先を適用")).clicked() {
                 let url = app.config.server_url.trim().to_string();
                 app.conn.set_url(url);
                 app.save_config();
@@ -78,7 +162,7 @@ fn connection_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
             } else {
                 theme::OK
             }));
-            if ui.button("確認").clicked() {
+            if ui.add(theme::text_button("確認")).clicked() {
                 ui.ctx().request_repaint();
             }
         });
@@ -97,17 +181,20 @@ fn connection_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
 
         ui.separator();
         let mut include_bones = app.conn.include_bones;
-        if ui
-            .checkbox(&mut include_bones, "データフィードで骨格 (bones) も購読")
-            .on_hover_text("トラッカーの算出骨格長を取得します。再購読が必要です。")
-            .changed()
+        if theme::switch(
+            ui,
+            &mut include_bones,
+            "データフィードで骨格 (bones) も購読",
+        )
+        .on_hover_text("トラッカーの算出骨格長を取得します。再購読が必要です。")
+        .changed()
         {
             app.conn.include_bones = include_bones;
             app.config.include_bones = include_bones;
             app.conn.restart_data_feed();
             app.save_config();
         }
-        if ui.button("データフィードを再送").clicked() {
+        if ui.add(theme::text_button("データフィードを再送")).clicked() {
             app.conn.restart_data_feed();
         }
     });
@@ -119,7 +206,7 @@ fn steamvr_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
     ui::section(ui, "SteamVR 連携", |ui| {
         ui.horizontal(|ui| {
             if ui
-                .button("SteamVR ドライバを有効化")
+                .add(theme::outlined_button("SteamVR ドライバを有効化"))
                 .on_hover_text("ドライバ登録と SteamVR 設定の書き込みを行います")
                 .clicked()
             {
@@ -128,7 +215,10 @@ fn steamvr_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
                     crate::proto::enable_steamvr_driver(),
                 ));
             }
-            if ui.button("インストール情報を取得").clicked() {
+            if ui
+                .add(theme::text_button("インストール情報を取得"))
+                .clicked()
+            {
                 frames.push((
                     "インストール情報取得",
                     crate::proto::installed_info_request(),
@@ -219,13 +309,13 @@ fn process_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
             }
         });
         ui.horizontal(|ui| {
-            if ui.button("再検出").clicked() {
+            if ui.add(theme::outlined_button("再検出")).clicked() {
                 let dir = app.config.server_dir.clone();
                 let java = app.config.java_path.clone();
                 app.server.detect(dir.as_deref(), java.as_deref());
                 app.save_config();
             }
-            if ui.button("サーバーログを消去").clicked() {
+            if ui.add(theme::text_button("サーバーログを消去")).clicked() {
                 app.server.clear_logs();
             }
         });
@@ -234,18 +324,18 @@ fn process_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
         ui.horizontal(|ui| {
             if running {
                 if ui
-                    .button(RichText::new("サーバーを停止").color(theme::WARN))
+                    .add(theme::outlined_button("サーバーを停止").text_color(theme::WARN))
                     .clicked()
                 {
                     app.server.stop();
                 }
-            } else if ui.button("サーバーを起動").clicked() {
+            } else if ui.add(theme::primary_button("サーバーを起動")).clicked() {
                 match app.server.start() {
                     Ok(()) => app.toast(crate::app::Severity::Info, "サーバーを起動しました"),
                     Err(error) => app.toast(crate::app::Severity::Error, error),
                 }
             }
-            if ui.button("設定ファイルを開く").clicked()
+            if ui.add(theme::text_button("設定ファイルを開く")).clicked()
                 && let Some(path) = config::server_config_path(app.config.server_dir.as_deref())
                 && let Some(parent) = path.parent()
             {

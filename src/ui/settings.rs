@@ -79,11 +79,14 @@ pub fn show(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.heading("設定");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("サーバーから再取得").clicked() {
+                if ui
+                    .add(theme::primary_button("サーバーから再取得"))
+                    .clicked()
+                {
                     app.request_settings();
                 }
                 if ui
-                    .button(RichText::new("設定を初期化").color(theme::WARN))
+                    .add(theme::outlined_button("設定を初期化").text_color(theme::WARN))
                     .on_hover_text("サーバー側の全設定を既定値に戻します")
                     .clicked()
                 {
@@ -143,14 +146,14 @@ fn apply_button<T: Clone>(
     let mut frame = None;
     ui.horizontal(|ui| {
         if ui
-            .add_enabled(draft.dirty && draft.seen, egui::Button::new("適用"))
+            .add_enabled(draft.dirty && draft.seen, theme::primary_button("適用"))
             .clicked()
         {
             frame = Some(encode(&draft.value));
             draft.dirty = false;
         }
         if ui
-            .add_enabled(draft.dirty, egui::Button::new("元に戻す"))
+            .add_enabled(draft.dirty, theme::outlined_button("元に戻す"))
             .clicked()
         {
             draft.dirty = false;
@@ -178,31 +181,31 @@ fn steam_vr_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
             wait_note(ui, draft.seen);
             let value = &mut draft.value;
             ui.horizontal_wrapped(|ui| {
-                draft.dirty |= ui.checkbox(&mut value.waist, "腰").changed();
-                draft.dirty |= ui.checkbox(&mut value.chest, "胸").changed();
+                draft.dirty |= theme::checkbox(ui, &mut value.waist, "腰").changed();
+                draft.dirty |= theme::checkbox(ui, &mut value.chest, "胸").changed();
             });
             ui.horizontal_wrapped(|ui| {
-                draft.dirty |= ui.checkbox(&mut value.left_knee, "左膝").changed();
-                draft.dirty |= ui.checkbox(&mut value.right_knee, "右膝").changed();
+                draft.dirty |= theme::checkbox(ui, &mut value.left_knee, "左膝").changed();
+                draft.dirty |= theme::checkbox(ui, &mut value.right_knee, "右膝").changed();
             });
             ui.horizontal_wrapped(|ui| {
-                draft.dirty |= ui.checkbox(&mut value.left_foot, "左足").changed();
-                draft.dirty |= ui.checkbox(&mut value.right_foot, "右足").changed();
+                draft.dirty |= theme::checkbox(ui, &mut value.left_foot, "左足").changed();
+                draft.dirty |= theme::checkbox(ui, &mut value.right_foot, "右足").changed();
             });
             ui.horizontal_wrapped(|ui| {
-                draft.dirty |= ui.checkbox(&mut value.left_elbow, "左肘").changed();
-                draft.dirty |= ui.checkbox(&mut value.right_elbow, "右肘").changed();
+                draft.dirty |= theme::checkbox(ui, &mut value.left_elbow, "左肘").changed();
+                draft.dirty |= theme::checkbox(ui, &mut value.right_elbow, "右肘").changed();
             });
             ui.horizontal_wrapped(|ui| {
-                draft.dirty |= ui.checkbox(&mut value.left_hand, "左手").changed();
-                draft.dirty |= ui.checkbox(&mut value.right_hand, "右手").changed();
+                draft.dirty |= theme::checkbox(ui, &mut value.left_hand, "左手").changed();
+                draft.dirty |= theme::checkbox(ui, &mut value.right_hand, "右手").changed();
             });
-            draft.dirty |= ui
-                .checkbox(
-                    &mut value.automatic_tracker_toggle,
-                    "SteamVR 起動時に自動でトラッカーを有効化",
-                )
-                .changed();
+            draft.dirty |= theme::switch(
+                ui,
+                &mut value.automatic_tracker_toggle,
+                "SteamVR 起動時に自動でトラッカーを有効化",
+            )
+            .changed();
             apply_button(ui, draft, crate::proto::set_steam_vr)
         })
     };
@@ -256,10 +259,9 @@ fn drift_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
         draft.sync(app.settings.drift.as_ref());
         ui::section(ui, "ドリフト補正", |ui| {
             wait_note(ui, draft.seen);
-            draft.dirty |= ui.checkbox(&mut draft.value.enabled, "有効").changed();
-            draft.dirty |= ui
-                .checkbox(&mut draft.value.prediction, "予測補正を使う")
-                .changed();
+            draft.dirty |= theme::switch(ui, &mut draft.value.enabled, "有効").changed();
+            draft.dirty |=
+                theme::switch(ui, &mut draft.value.prediction, "予測補正を使う").changed();
             ui.horizontal(|ui| {
                 ui.label("補正量");
                 draft.dirty |= ui
@@ -302,7 +304,7 @@ fn model_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
                 (&mut toggles.correct_constraints, "拘束を補正"),
             ];
             for (value, label) in items {
-                draft.dirty |= ui.checkbox(value, label).changed();
+                draft.dirty |= theme::checkbox(ui, value, label).changed();
             }
 
             ui.add_space(4.0);
@@ -334,7 +336,7 @@ fn model_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
             for (value, label) in ratios {
                 ui.horizontal(|ui| {
                     let mut enabled = value.is_some();
-                    if ui.checkbox(&mut enabled, "").changed() {
+                    if theme::switch(ui, &mut enabled, "").changed() {
                         *value = if enabled { Some(0.5) } else { None };
                         draft.dirty = true;
                     }
@@ -352,7 +354,7 @@ fn model_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
             ui.add_space(4.0);
             ui.horizontal(|ui| {
                 let mut enabled = draft.value.correction_strength.is_some();
-                if ui.checkbox(&mut enabled, "脚補正の強さ").changed() {
+                if theme::switch(ui, &mut enabled, "脚補正の強さ").changed() {
                     draft.value.correction_strength = enabled.then_some(0.5);
                     draft.dirty = true;
                 }
@@ -403,18 +405,20 @@ fn resets_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
         draft.sync(app.settings.resets.as_ref());
         ui::section(ui, "リセット", |ui| {
             wait_note(ui, draft.seen);
-            draft.dirty |= ui
-                .checkbox(
-                    &mut draft.value.save_mounting_reset,
-                    "マウンティング リセットを保存",
-                )
-                .changed();
-            draft.dirty |= ui
-                .checkbox(&mut draft.value.reset_mounting_feet, "足もリセット")
-                .changed();
-            draft.dirty |= ui
-                .checkbox(&mut draft.value.reset_hmd_pitch, "HMD のピッチもリセット")
-                .changed();
+            draft.dirty |= theme::switch(
+                ui,
+                &mut draft.value.save_mounting_reset,
+                "マウンティング リセットを保存",
+            )
+            .changed();
+            draft.dirty |=
+                theme::switch(ui, &mut draft.value.reset_mounting_feet, "足もリセット").changed();
+            draft.dirty |= theme::switch(
+                ui,
+                &mut draft.value.reset_hmd_pitch,
+                "HMD のピッチもリセット",
+            )
+            .changed();
             ui.horizontal(|ui| {
                 ui.label("Yaw 平滑化 (秒)");
                 draft.dirty |= ui
@@ -460,10 +464,9 @@ fn stay_aligned_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
         draft.sync(app.settings.stay_aligned.as_ref());
         ui::section(ui, "Stay Aligned (姿勢維持補正)", |ui| {
             wait_note(ui, draft.seen);
-            draft.dirty |= ui.checkbox(&mut draft.value.enabled, "有効").changed();
-            draft.dirty |= ui
-                .checkbox(&mut draft.value.hide_yaw_correction, "Yaw 補正を隠す")
-                .changed();
+            draft.dirty |= theme::switch(ui, &mut draft.value.enabled, "有効").changed();
+            draft.dirty |=
+                theme::switch(ui, &mut draft.value.hide_yaw_correction, "Yaw 補正を隠す").changed();
 
             let poses: [(&mut bool, &mut f32, &mut f32, &mut f32, &str); 3] = [
                 (
@@ -490,7 +493,7 @@ fn stay_aligned_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
             ];
             for (enabled, upper, lower, foot, label) in poses {
                 ui.horizontal(|ui| {
-                    draft.dirty |= ui.checkbox(enabled, label).changed();
+                    draft.dirty |= theme::checkbox(ui, enabled, label).changed();
                     ui.label("腿上");
                     draft.dirty |= ui
                         .add(egui::DragValue::new(upper).speed(1.0).range(0.0..=180.0))
@@ -505,19 +508,18 @@ fn stay_aligned_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
                         .changed();
                 });
             }
-            draft.dirty |= ui
-                .checkbox(&mut draft.value.setup_complete, "セットアップ完了")
-                .changed();
+            draft.dirty |=
+                theme::switch(ui, &mut draft.value.setup_complete, "セットアップ完了").changed();
             let mut enabled_now = None;
             ui.horizontal(|ui| {
                 if ui
-                    .button("Stay Aligned を今すぐ有効化")
+                    .add(theme::outlined_button("Stay Aligned を今すぐ有効化"))
                     .on_hover_text("設定の適用とは別に、補正を即座に有効にします")
                     .clicked()
                 {
                     enabled_now = Some(true);
                 }
-                if ui.button("無効化").clicked() {
+                if ui.add(theme::text_button("無効化")).clicked() {
                     enabled_now = Some(false);
                 }
             });
@@ -535,7 +537,7 @@ fn stay_aligned_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
 }
 
 fn osc_fields(ui: &mut egui::Ui, osc: &mut OscSettings, dirty: &mut bool) {
-    *dirty |= ui.checkbox(&mut osc.enabled, "OSC を有効化").changed();
+    *dirty |= theme::switch(ui, &mut osc.enabled, "OSC を有効化").changed();
     ui.horizontal(|ui| {
         ui.label("受信ポート");
         *dirty |= ui
@@ -577,17 +579,16 @@ fn vrc_osc_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
             wait_note(ui, draft.seen);
             osc_fields(ui, &mut draft.value.osc, &mut draft.dirty);
             ui.horizontal_wrapped(|ui| {
-                draft.dirty |= ui.checkbox(&mut draft.value.head, "頭").changed();
-                draft.dirty |= ui.checkbox(&mut draft.value.chest, "胸").changed();
-                draft.dirty |= ui.checkbox(&mut draft.value.waist, "腰").changed();
-                draft.dirty |= ui.checkbox(&mut draft.value.knees, "膝").changed();
-                draft.dirty |= ui.checkbox(&mut draft.value.feet, "足").changed();
-                draft.dirty |= ui.checkbox(&mut draft.value.elbows, "肘").changed();
-                draft.dirty |= ui.checkbox(&mut draft.value.hands, "手").changed();
+                draft.dirty |= theme::checkbox(ui, &mut draft.value.head, "頭").changed();
+                draft.dirty |= theme::checkbox(ui, &mut draft.value.chest, "胸").changed();
+                draft.dirty |= theme::checkbox(ui, &mut draft.value.waist, "腰").changed();
+                draft.dirty |= theme::checkbox(ui, &mut draft.value.knees, "膝").changed();
+                draft.dirty |= theme::checkbox(ui, &mut draft.value.feet, "足").changed();
+                draft.dirty |= theme::checkbox(ui, &mut draft.value.elbows, "肘").changed();
+                draft.dirty |= theme::checkbox(ui, &mut draft.value.hands, "手").changed();
             });
-            draft.dirty |= ui
-                .checkbox(&mut draft.value.oscquery_enabled, "OSCQuery を有効化")
-                .changed();
+            draft.dirty |=
+                theme::switch(ui, &mut draft.value.oscquery_enabled, "OSCQuery を有効化").changed();
             apply_button(ui, draft, crate::proto::set_vrc_osc)
         })
     };
@@ -603,12 +604,11 @@ fn vmc_osc_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
         ui::section(ui, "VMC OSC", |ui| {
             wait_note(ui, draft.seen);
             osc_fields(ui, &mut draft.value.osc, &mut draft.dirty);
-            draft.dirty |= ui
-                .checkbox(&mut draft.value.anchor_hip, "骨盤を基準にする")
-                .changed();
-            draft.dirty |= ui
-                .checkbox(&mut draft.value.mirror_tracking, "トラッキングをミラー")
-                .changed();
+            draft.dirty |=
+                theme::switch(ui, &mut draft.value.anchor_hip, "骨盤を基準にする").changed();
+            draft.dirty |=
+                theme::switch(ui, &mut draft.value.mirror_tracking, "トラッキングをミラー")
+                    .changed();
             apply_button(ui, draft, crate::proto::set_vmc_osc)
         })
     };
@@ -648,7 +648,7 @@ fn tap_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
             for (enabled, delay, taps, label) in rows {
                 ui.horizontal(|ui| {
                     let mut on = enabled.unwrap_or(false);
-                    if ui.checkbox(&mut on, label).changed() {
+                    if theme::checkbox(ui, &mut on, label).changed() {
                         *enabled = Some(on);
                         draft.dirty = true;
                     }
@@ -704,14 +704,12 @@ fn misc_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
         {
             let hid = &mut app.drafts.hid;
             let mut hid_value = hid.value;
-            if ui
-                .checkbox(&mut hid_value, "トラッカーを HID 経由で送信")
-                .changed()
+            if theme::switch(ui, &mut hid_value, "トラッカーを HID 経由で送信").changed()
             {
                 hid.value = hid_value;
                 hid.dirty = true;
             }
-            if hid.dirty && ui.button("HID を適用").clicked() {
+            if hid.dirty && ui.add(theme::primary_button("HID を適用")).clicked() {
                 hid.dirty = false;
                 frames.push(("HID 設定", crate::proto::set_hid(hid.value)));
             }
@@ -720,14 +718,11 @@ fn misc_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
         {
             let velocity = &mut app.drafts.velocity;
             let mut velocity_value = velocity.value;
-            if ui
-                .checkbox(&mut velocity_value, "算出した速度を送信")
-                .changed()
-            {
+            if theme::switch(ui, &mut velocity_value, "算出した速度を送信").changed() {
                 velocity.value = velocity_value;
                 velocity.dirty = true;
             }
-            if velocity.dirty && ui.button("速度を適用").clicked() {
+            if velocity.dirty && ui.add(theme::primary_button("速度を適用")).clicked() {
                 velocity.dirty = false;
                 frames.push(("速度設定", crate::proto::set_velocity(velocity.value)));
             }
@@ -744,7 +739,7 @@ fn misc_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
         if vrm_text.changed() {
             app.drafts.vrm_dirty = true;
         }
-        if app.drafts.vrm_dirty && ui.button("VRM JSON を適用").clicked() {
+        if app.drafts.vrm_dirty && ui.add(theme::primary_button("VRM JSON を適用")).clicked() {
             app.drafts.vrm_dirty = false;
             frames.push((
                 "VRM 設定",
@@ -762,7 +757,7 @@ fn vrc_config_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
     let Some(mut vrc) = app.vrc.clone() else {
         ui::section(ui, "VRChat 設定チェック", |ui| {
             ui.label(RichText::new("未取得").color(theme::MUTED));
-            if ui.button("取得").clicked() {
+            if ui.add(theme::text_button("取得")).clicked() {
                 let frame = crate::proto::vrc_config_state_request();
                 app.send_frame(frame, "VRChat 設定取得");
             }
@@ -817,13 +812,16 @@ fn vrc_config_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
             );
             for key in &vrc.muted {
                 ui.horizontal(|ui| {
-                    if ui.button(format!("{key} を解除")).clicked() {
+                    if ui
+                        .add(theme::text_button(format!("{key} を解除")))
+                        .clicked()
+                    {
                         toggle = Some(key.clone());
                     }
                 });
             }
         }
-        if ui.button("再取得").clicked() {
+        if ui.add(theme::text_button("再取得")).clicked() {
             let frame = crate::proto::vrc_config_state_request();
             app.send_frame(frame, "VRChat 設定取得");
         }

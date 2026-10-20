@@ -42,11 +42,11 @@ fn controls(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
 
         ui.horizontal(|ui| {
             let mut include_feet = app.reset_include_feet;
-            if ui.checkbox(&mut include_feet, "足を含める").changed() {
+            if theme::switch(ui, &mut include_feet, "足を含める").changed() {
                 app.reset_include_feet = include_feet;
             }
             let mut include_fingers = app.reset_include_fingers;
-            if ui.checkbox(&mut include_fingers, "指を含める").changed() {
+            if theme::switch(ui, &mut include_fingers, "指を含める").changed() {
                 app.reset_include_fingers = include_fingers;
             }
         });
@@ -56,17 +56,17 @@ fn controls(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
         ui.horizontal_wrapped(|ui| {
             let yaw = ui.add_enabled(
                 app.guards.can_do_yaw_reset,
-                egui::Button::new("Yaw リセット"),
+                theme::outlined_button("Yaw リセット"),
             );
             if yaw.clicked() {
                 app.start_reset(ResetType::Yaw, &body_parts);
             }
-            if ui.button("フルリセット").clicked() {
+            if ui.add(theme::primary_button("フルリセット")).clicked() {
                 app.start_reset(ResetType::Full, &body_parts);
             }
             let mounting = ui.add_enabled(
                 app.guards.can_do_mounting,
-                egui::Button::new("マウンティング リセット"),
+                theme::outlined_button("マウンティング リセット"),
             );
             if mounting.clicked() {
                 app.start_reset(ResetType::Mounting, &[]);
@@ -108,7 +108,7 @@ fn controls(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
         } else {
             "トラッキングを一時停止"
         };
-        if ui.button(pause_label).clicked() {
+        if ui.add(theme::outlined_button(pause_label)).clicked() {
             app.set_paused(!app.paused);
         }
         ui.label(
@@ -157,18 +157,20 @@ fn reset_settings(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
         let draft = &mut app.drafts.resets;
         draft.sync(Some(&truth));
         ui::section(ui, "リセット設定", |ui| {
-            changed |= ui
-                .checkbox(
-                    &mut draft.value.save_mounting_reset,
-                    "マウンティング リセットを保存",
-                )
-                .changed();
-            changed |= ui
-                .checkbox(&mut draft.value.reset_mounting_feet, "足もリセット")
-                .changed();
-            changed |= ui
-                .checkbox(&mut draft.value.reset_hmd_pitch, "HMD のピッチもリセット")
-                .changed();
+            changed |= theme::switch(
+                ui,
+                &mut draft.value.save_mounting_reset,
+                "マウンティング リセットを保存",
+            )
+            .changed();
+            changed |=
+                theme::switch(ui, &mut draft.value.reset_mounting_feet, "足もリセット").changed();
+            changed |= theme::switch(
+                ui,
+                &mut draft.value.reset_hmd_pitch,
+                "HMD のピッチもリセット",
+            )
+            .changed();
             ui.add_space(4.0);
             ui.horizontal(|ui| {
                 ui.label("Yaw リセットの平滑化 (秒)");
@@ -209,14 +211,14 @@ fn reset_settings(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 if ui
-                    .add_enabled(draft.dirty, egui::Button::new("適用"))
+                    .add_enabled(draft.dirty, theme::primary_button("適用"))
                     .clicked()
                 {
                     frame = Some(crate::proto::set_resets(&draft.value));
                     draft.dirty = false;
                 }
                 if ui
-                    .add_enabled(draft.dirty, egui::Button::new("元に戻す"))
+                    .add_enabled(draft.dirty, theme::outlined_button("元に戻す"))
                     .clicked()
                 {
                     draft.value = truth.clone();

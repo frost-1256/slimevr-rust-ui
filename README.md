@@ -6,8 +6,9 @@ an already running SlimeVR server over the same SolarXR WebSocket RPC API
 untouched; both can be used side by side, but only one should own reset/assignment
 actions at a time.
 
-Japanese UI text, dark SlimeVR-style theme, and an embedded Japanese font
-(IPAexGothic) so it renders without system CJK fonts.
+Japanese UI text, Material 3 components (`egui-material3` on egui/eframe 0.33),
+and embedded Noto Sans JP + Material Symbols fonts, so Japanese text and icons
+render without any system CJK or icon fonts.
 
 ## Features
 
@@ -27,7 +28,8 @@ Japanese UI text, dark SlimeVR-style theme, and an embedded Japanese font
   server log tail.
 - **Server**: connection state, SteamVR driver install, udev/Wayland info,
   start/stop the Java server from the UI (jar + Java auto-detection or explicit
-  paths), server log.
+  paths), one-click download of `slimevr.jar` (latest GitHub release) and of an
+  Adoptium JRE 17 into the per-user data directory, server log.
 
 ## Run
 
@@ -36,8 +38,17 @@ cargo run
 ```
 
 Server discovery order for the jar is: `--path`, resources, `/usr/share/slimevr`,
-the executable directory, the current directory, and the in-tree Gradle output
-(`server/server/desktop/build/libs/slimevr.jar`).
+the downloaded jar (`<data dir>/slimevr-native-ui/slimevr.jar`), the executable
+directory, the current directory, and the in-tree Gradle output
+(`server/server/desktop/build/libs/slimevr.jar`). The data directory is
+`%LOCALAPPDATA%\slimevr-native-ui` on Windows and
+`$XDG_DATA_HOME/slimevr-native-ui` (usually `~/.local/share/...`) elsewhere. A
+downloaded runtime is picked up as `<data dir>/jre/bin/java`.
+
+Downloads come from the latest GitHub release asset
+(`.../releases/latest/download/slimevr.jar`) and from Adoptium's
+`api.adoptium.net` JRE 17 for the running OS/arch. The server page shows live
+progress and re-detects jar/Java as soon as a download finishes.
 
 Smoke test (renders for 3 seconds, prints `smoke-ok`, exits 0):
 
@@ -83,5 +94,8 @@ The suite covers protocol compatibility quirks rather than the UI itself:
 
 ## Font license
 
-`assets/fonts/ipaexg.ttf` is IPAexGothic, redistributed unmodified under the IPA
-Font License v1.0 (see `assets/fonts/LICENSE.txt`).
+`assets/fonts/NotoSansJP-Regular.ttf` is Noto Sans JP (weight 400, subset) under
+the SIL Open Font License 1.1. `assets/fonts/MaterialSymbolsOutlined.ttf` is a
+subset of Google's Material Symbols Outlined under the Apache License 2.0. Both
+are embedded into the executable; see `assets/fonts/LICENSE.txt` for the subset
+recipe and license text links.

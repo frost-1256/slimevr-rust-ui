@@ -5,6 +5,7 @@
 
 mod app;
 mod config;
+mod download;
 mod model;
 mod net;
 mod proto;

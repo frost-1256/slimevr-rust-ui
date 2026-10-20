@@ -12,7 +12,7 @@ pub fn show(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.heading("セットアップ チェックリスト");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("再取得").clicked() {
+                if ui.add(theme::text_button("再取得")).clicked() {
                     let frame = crate::proto::checklist_request();
                     app.send_frame(frame, "チェックリスト取得");
                 }
@@ -41,7 +41,7 @@ pub fn show(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
             theme::card(ui, |ui| {
                 ui.horizontal(|ui| {
                     let (mark, color) = if step.valid {
-                        ("●", theme::OK)
+                        ("✓", theme::OK)
                     } else if step.ignored {
                         ("—", theme::MUTED)
                     } else {
@@ -68,7 +68,7 @@ pub fn show(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
                             } else {
                                 "無視する"
                             };
-                            if ui.button(label).clicked() {
+                            if ui.add(theme::text_button(label)).clicked() {
                                 toggles.push((step.id, !step.ignored));
                             }
                         });

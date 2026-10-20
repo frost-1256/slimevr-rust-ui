@@ -226,6 +226,9 @@ pub fn find_jar(preferred: Option<&Path>) -> Option<PathBuf> {
     if let Some(dir) = preferred {
         candidates.push(dir.join("slimevr.jar"));
     }
+    // A jar downloaded from the settings page wins over the bundled copy:
+    // clicking "download" is an explicit request to use that build.
+    candidates.push(crate::download::installed_jar());
     if let Some(dir) = exe_dir() {
         candidates.push(dir.join("slimevr.jar"));
         candidates.push(dir.join("share/slimevr/slimevr.jar"));
@@ -253,6 +256,13 @@ pub fn find_java(jar_dir: Option<&Path>) -> Option<PathBuf> {
             if candidate.is_file() {
                 return Some(candidate);
             }
+        }
+    }
+
+    for name in ["bin/java.exe", "bin/java"] {
+        let candidate = crate::download::installed_java().join(name);
+        if candidate.is_file() {
+            return Some(candidate);
         }
     }
 

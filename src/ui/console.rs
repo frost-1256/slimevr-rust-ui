@@ -41,13 +41,13 @@ fn serial_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
 
     ui::section(ui, "シリアルデバイス", |ui| {
         ui.horizontal(|ui| {
-            if ui.button("デバイスを再取得").clicked() {
+            if ui.add(theme::text_button("デバイスを再取得")).clicked() {
                 frames.push((
                     "シリアルデバイス取得",
                     crate::proto::serial_devices_request(),
                 ));
             }
-            if app.serial.open && ui.button("切断").clicked() {
+            if app.serial.open && ui.add(theme::outlined_button("切断")).clicked() {
                 frames.push(("シリアル切断", crate::proto::close_serial()));
             }
             ui.label(
@@ -79,7 +79,7 @@ fn serial_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
                 for (port, name, kind) in app.serial.devices.clone() {
                     ui.label(RichText::new(&port).monospace());
                     ui.label(format!("{name} ({})", serial_device_kind_label(kind)));
-                    if ui.button("接続").clicked() {
+                    if ui.add(theme::primary_button("接続")).clicked() {
                         frames.push((
                             "シリアル接続",
                             crate::proto::open_serial(false, Some(&port)),
@@ -92,13 +92,13 @@ fn serial_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
         if app.serial.open {
             ui.separator();
             ui.horizontal_wrapped(|ui| {
-                if ui.button("再起動").clicked() {
+                if ui.add(theme::outlined_button("再起動")).clicked() {
                     frames.push(("トラッカー再起動", crate::proto::serial_tracker_reboot()));
                 }
-                if ui.button("情報取得").clicked() {
+                if ui.add(theme::outlined_button("情報取得")).clicked() {
                     frames.push(("トラッカー情報", crate::proto::serial_tracker_get_info()));
                 }
-                if ui.button("WiFi スキャン").clicked() {
+                if ui.add(theme::outlined_button("WiFi スキャン")).clicked() {
                     frames.push((
                         "WiFi スキャン",
                         crate::proto::serial_tracker_get_wifi_scan(),
@@ -107,7 +107,7 @@ fn serial_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
             });
             ui.horizontal(|ui| {
                 if ui
-                    .button(RichText::new("工場出荷状態に戻す").color(theme::ERROR))
+                    .add(theme::outlined_button("工場出荷状態に戻す").text_color(theme::ERROR))
                     .clicked()
                 {
                     confirm_factory = true;
@@ -121,7 +121,7 @@ fn serial_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
                             .small(),
                     );
                     if ui
-                        .button(RichText::new("実行する").color(theme::ERROR))
+                        .add(theme::primary_button("実行する").text_color(theme::ERROR))
                         .clicked()
                     {
                         frames.push((
@@ -140,7 +140,9 @@ fn serial_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
                         .desired_width(180.0)
                         .hint_text("例: SET WIFI"),
                 );
-                if ui.button("送信").clicked() && !app.serial.command.trim().is_empty() {
+                if ui.add(theme::primary_button("送信")).clicked()
+                    && !app.serial.command.trim().is_empty()
+                {
                     let command = app.serial.command.trim().to_string();
                     frames.push((
                         "シリアルコマンド",
@@ -174,7 +176,7 @@ fn wifi_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
         ui.horizontal(|ui| {
             let ready = app.serial.open && !app.serial.ssid.is_empty();
             if ui
-                .add_enabled(ready, egui::Button::new("WiFi 設定を開始"))
+                .add_enabled(ready, theme::primary_button("WiFi 設定を開始"))
                 .clicked()
             {
                 let ssid = app.serial.ssid.clone();
@@ -184,7 +186,7 @@ fn wifi_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
                     crate::proto::start_wifi_provisioning(&ssid, &password),
                 ));
             }
-            if ui.button("停止").clicked() {
+            if ui.add(theme::outlined_button("停止")).clicked() {
                 frames.push((
                     "WiFi プロビジョニング停止",
                     crate::proto::stop_wifi_provisioning(),
@@ -264,7 +266,7 @@ fn firmware_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
             let selected = app.firmware.selected_devices.contains(&device_id);
             let mut checked = selected;
             ui.horizontal(|ui| {
-                if ui.checkbox(&mut checked, &name).changed() {
+                if theme::checkbox(ui, &mut checked, &name).changed() {
                     if checked {
                         app.firmware.selected_devices.push(device_id);
                     } else {
@@ -288,7 +290,7 @@ fn firmware_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
             let ready =
                 !app.firmware.selected_devices.is_empty() && !app.firmware.url.trim().is_empty();
             if ui
-                .add_enabled(ready, egui::Button::new("更新を開始"))
+                .add_enabled(ready, theme::primary_button("更新を開始"))
                 .on_hover_text("選択したデバイスに OTA 更新をキューします")
                 .clicked()
             {
@@ -302,7 +304,7 @@ fn firmware_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
                 }
             }
             if ui
-                .button("キューを停止")
+                .add(theme::outlined_button("キューを停止"))
                 .on_hover_text("実行中のファームウェア更新を中断します")
                 .clicked()
             {

@@ -1,11 +1,32 @@
-IPAexGothic (assets/fonts/ipaexg.ttf)
+Noto Sans JP (assets/fonts/NotoSansJP-Regular.ttf)
 
-Copyright (c) 2010-2024, Information-technology Promotion Agency, Japan (IPA).
-This font is used unmodified and is redistributed under the
-IPA Font License Agreement v1.0.
+Copyright 2014-2025 Adobe (http://www.adobe.com/), with Reserved Font Name
+'Source'. Source is a trademark of Adobe in the United States and/or other
+countries. Noto is a trademark of Google LLC.
 
-Full license text (authoritative): https://moji.or.jp/ipafont/license/
-IPAexFont distribution page:    https://moji.or.jp/ipafont/ipaexfont/
+Licensed under the SIL Open Font License, Version 1.1.
+
+The upstream variable font (google/fonts, ofl/notosansjp/NotoSansJP[wght].ttf)
+was instanced at weight 400 and subset with pyftsubset (fonttools) to the
+codepoint ranges a Japanese desktop UI needs: Latin-1, general punctuation,
+arrows, circled numbers, geometric shapes, dingbats, CJK punctuation, kana and
+CJK unified ideographs. No glyph outlines were otherwise modified.
+
+Full license text (authoritative): https://openfontlicense.org/
+Upstream font: https://github.com/google/fonts/tree/main/ofl/notosansjp
 
 The font is embedded into the executable (via include_bytes!) as a fallback
 typeface so that Japanese text renders on systems without Japanese fonts.
+
+Material Symbols Outlined (assets/fonts/MaterialSymbolsOutlined.ttf)
+
+Copyright 2024 Google LLC. Licensed under the Apache License, Version 2.0.
+
+The upstream variable font (google/material-design-icons,
+variablefont/MaterialSymbolsOutlined[FILL,GRAD,opsz,wght].ttf) was subset with
+pyftsubset (fonttools) to the eight navigation glyphs this UI uses
+(U+E41C, U+E51E, U+E6B1, U+E871, U+E875, U+E8B8, U+EB8E, U+F053), keeping the
+variable axes untouched. No glyph outlines were otherwise modified.
+
+Full license text (authoritative): https://www.apache.org/licenses/LICENSE-2.0
+Upstream font: https://github.com/google/material-design-icons

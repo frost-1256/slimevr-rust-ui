@@ -62,12 +62,12 @@ fn bones_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
                     );
                 }
                 if ui
-                    .button(RichText::new("全て初期化").color(theme::WARN))
+                    .add(theme::outlined_button("全て初期化").text_color(theme::WARN))
                     .clicked()
                 {
                     reset_all = true;
                 }
-                if ui.button("再取得").clicked() {
+                if ui.add(theme::text_button("再取得")).clicked() {
                     app.request_settings();
                 }
             });
@@ -125,7 +125,10 @@ fn feed_bones_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
                     .small()
                     .color(theme::MUTED),
             );
-            if ui.button("bones 購読を有効化").clicked() {
+            if ui
+                .add(theme::outlined_button("bones 購読を有効化"))
+                .clicked()
+            {
                 app.conn.include_bones = true;
                 app.config.include_bones = true;
                 app.conn.restart_data_feed();
@@ -183,12 +186,12 @@ fn calibration_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
         ui.horizontal(|ui| {
             let enabled = app.guards.can_do_user_height_calibration;
             if ui
-                .add_enabled(enabled, egui::Button::new("計測を開始"))
+                .add_enabled(enabled, theme::outlined_button("計測を開始"))
                 .clicked()
             {
                 start = true;
             }
-            if ui.button("キャンセル").clicked() {
+            if ui.add(theme::outlined_button("キャンセル")).clicked() {
                 cancel = true;
             }
         });
@@ -288,16 +291,16 @@ fn autobone_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
 
         ui.add_space(6.0);
         ui.horizontal_wrapped(|ui| {
-            if ui.button("記録開始").clicked() {
+            if ui.add(theme::outlined_button("記録開始")).clicked() {
                 send = Some(("AutoBone 記録開始", crate::proto::auto_bone_process(1)));
             }
-            if ui.button("記録停止").clicked() {
+            if ui.add(theme::outlined_button("記録停止")).clicked() {
                 send = Some((
                     "AutoBone 記録停止",
                     crate::proto::auto_bone_stop_recording(),
                 ));
             }
-            if ui.button("記録を破棄").clicked() {
+            if ui.add(theme::outlined_button("記録を破棄")).clicked() {
                 send = Some((
                     "AutoBone 記録破棄",
                     crate::proto::auto_bone_cancel_recording(),
@@ -307,13 +310,13 @@ fn autobone_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
         ui.add_space(4.0);
         ui.horizontal_wrapped(|ui| {
             if ui
-                .add_enabled(has_height, egui::Button::new("処理を実行"))
+                .add_enabled(has_height, theme::primary_button("処理を実行"))
                 .clicked()
             {
                 send = Some(("AutoBone 処理", crate::proto::auto_bone_process(3)));
             }
             if ui
-                .add_enabled(has_height, egui::Button::new("結果を適用"))
+                .add_enabled(has_height, theme::primary_button("結果を適用"))
                 .clicked()
             {
                 send = Some(("AutoBone 適用", crate::proto::auto_bone_apply()));

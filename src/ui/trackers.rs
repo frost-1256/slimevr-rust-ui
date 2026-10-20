@@ -15,7 +15,7 @@ pub fn show(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
                 .desired_width(220.0),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.button("設定再取得").clicked() {
+            if ui.add(theme::text_button("設定再取得")).clicked() {
                 app.request_settings();
             }
             ui.label(
@@ -30,10 +30,22 @@ pub fn show(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
     });
     ui.add_space(6.0);
 
+    if !app.computed_trackers().is_empty() {
+        ui.label(
+            RichText::new(format!(
+                "サーバーが計算している仮想トラッカー: {} 件（実機ではありません）",
+                app.computed_trackers().len()
+            ))
+            .color(theme::MUTED)
+            .small(),
+        );
+        ui.add_space(4.0);
+    }
+
     if app.all_trackers().is_empty() {
         ui::placeholder(
             ui,
-            "トラッカーが見つかりません。サーバーが動作しているか確認してください。",
+            "トラッカーが検出されていないか、割り当てられていません。",
         );
         return;
     }
@@ -217,7 +229,7 @@ fn details(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
                     .desired_width(170.0),
             );
             if ui
-                .button("保存")
+                .add(theme::primary_button("保存"))
                 .on_hover_text("AssignTrackerRequest として送信します")
                 .clicked()
             {
@@ -225,7 +237,7 @@ fn details(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
                 let body_part = tracker.body_part;
                 app.assign_tracker(key, body_part, Some(name));
             }
-            if ui.button("クリア").clicked() {
+            if ui.add(theme::text_button("クリア")).clicked() {
                 app.rename_buffer.clear();
                 let body_part = tracker.body_part;
                 app.assign_tracker(key, body_part, None);
@@ -237,7 +249,7 @@ fn details(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
             if ui
                 .add_enabled(
                     app.guards.can_do_mounting,
-                    egui::Button::new("マウンティング リセット"),
+                    theme::outlined_button("マウンティング リセット"),
                 )
                 .clicked()
             {
@@ -250,14 +262,14 @@ fn details(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
                 "磁気補正を有効化"
             };
             if ui
-                .add_enabled(tracker.magnetometer != 0, egui::Button::new(mag_label))
+                .add_enabled(tracker.magnetometer != 0, theme::outlined_button(mag_label))
                 .on_hover_text("MagnetometerStatus が「非対応」の場合は操作できません")
                 .clicked()
             {
                 let frame = crate::proto::change_mag_toggle(key, !mag_enabled);
                 app.send_frame(frame, "磁気補正の切替");
             }
-            if ui.button("磁気状態を取得").clicked() {
+            if ui.add(theme::text_button("磁気状態を取得")).clicked() {
                 let frame = crate::proto::mag_toggle_request(key);
                 app.send_frame(frame, "磁気状態取得");
             }
@@ -415,17 +427,17 @@ fn details(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
             ui.horizontal(|ui| {
                 if confirmed {
                     if ui
-                        .button(RichText::new("本当に削除").color(theme::ERROR))
+                        .add(theme::outlined_button("本当に削除").text_color(theme::ERROR))
                         .clicked()
                     {
                         app.forget_device(device_id);
                         app.forget_confirm = None;
                     }
-                    if ui.button("キャンセル").clicked() {
+                    if ui.add(theme::text_button("キャンセル")).clicked() {
                         app.forget_confirm = None;
                     }
                 } else if ui
-                    .button(label)
+                    .add(theme::text_button(label))
                     .on_hover_text("サーバーからデバイスのペアリング情報を削除します")
                     .clicked()
                 {

@@ -19,10 +19,10 @@ pub fn show(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
                     "SlimeVR サーバーを起動するか、「サーバー」ページで jar を指定してください。",
                 );
                 ui.horizontal(|ui| {
-                    if ui.button("再接続").clicked() {
+                    if ui.add(theme::primary_button("再接続")).clicked() {
                         app.conn.reconnect();
                     }
-                    if ui.button("設定再取得").clicked() {
+                    if ui.add(theme::text_button("設定再取得")).clicked() {
                         app.request_settings();
                     }
                 });
@@ -115,20 +115,20 @@ fn resets(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
         ui.horizontal_wrapped(|ui| {
             let yaw = ui.add_enabled(
                 app.guards.can_do_yaw_reset,
-                egui::Button::new("Yaw リセット"),
+                theme::outlined_button("Yaw リセット"),
             );
             if yaw.clicked() {
                 app.start_reset(ResetType::Yaw, &[]);
             }
             yaw.on_hover_text("向きだけをリセットします");
 
-            if ui.button("フルリセット").clicked() {
+            if ui.add(theme::primary_button("フルリセット")).clicked() {
                 app.start_reset(ResetType::Full, &[]);
             }
 
             let mounting = ui.add_enabled(
                 app.guards.can_do_mounting,
-                egui::Button::new("マウンティング リセット"),
+                theme::outlined_button("マウンティング リセット"),
             );
             if mounting.clicked() {
                 app.start_reset(ResetType::Mounting, &[]);
@@ -164,9 +164,7 @@ fn resets(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
                 .as_ref()
                 .map(|resets| resets.reset_mounting_feet)
                 .unwrap_or(false);
-            if ui
-                .checkbox(&mut feet, "マウンティング リセット時に足もリセット")
-                .changed()
+            if theme::switch(ui, &mut feet, "マウンティング リセット時に足もリセット").changed()
                 && let Some(resets) = app.settings.resets.clone()
             {
                 let mut update = resets;

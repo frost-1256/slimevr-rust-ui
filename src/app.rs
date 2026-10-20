@@ -28,7 +28,7 @@ impl Page {
         (Page::Dashboard, "ダッシュボード"),
         (Page::Trackers, "トラッカー"),
         (Page::Reset, "リセット"),
-        (Page::Proportions, "ボディプロポーション"),
+        (Page::Proportions, "プロポーション"),
         (Page::Checklist, "チェックリスト"),
         (Page::Settings, "設定"),
         (Page::Console, "シリアル / FW"),
@@ -41,6 +41,20 @@ impl Page {
             .find(|(page, _)| *page == self)
             .map(|(_, label)| *label)
             .unwrap_or("?")
+    }
+
+    /// Material Symbols name, matching `Page::ALL` order.
+    pub fn icon(self) -> &'static str {
+        match self {
+            Page::Dashboard => "dashboard",
+            Page::Trackers => "sensors",
+            Page::Reset => "restart_alt",
+            Page::Proportions => "straighten",
+            Page::Checklist => "checklist",
+            Page::Settings => "settings",
+            Page::Console => "terminal",
+            Page::Server => "dns",
+        }
     }
 }
 
@@ -120,6 +134,7 @@ pub struct SlimeVrApp {
     pub smoke_deadline: Option<Instant>,
     smoke_page_timer: Instant,
     pub show_help: bool,
+    pub downloads: crate::download::Downloads,
     pub ui_scale: f32,
     pub last_settings_request: Instant,
 }
@@ -182,6 +197,7 @@ impl SlimeVrApp {
             smoke_deadline: None,
             smoke_page_timer: Instant::now(),
             show_help: false,
+            downloads: crate::download::Downloads::default(),
             ui_scale,
             last_settings_request: Instant::now(),
         };
@@ -209,15 +225,19 @@ impl SlimeVrApp {
         }
     }
 
-    /// Every tracker the server knows about: physical first, then computed.
+    /// Physical trackers reported by the data feed. Computed (synthetic)
+    /// trackers are intentionally excluded: they exist even with no hardware,
+    /// and the Electron GUI keeps them out of the tracker lists too.
     pub fn all_trackers(&self) -> Vec<&Tracker> {
-        let mut trackers: Vec<&Tracker> = self
-            .devices
+        self.devices
             .iter()
             .flat_map(|device| device.trackers.iter())
-            .collect();
-        trackers.extend(self.synthetic.iter());
-        trackers
+            .collect()
+    }
+
+    /// Server-side computed trackers (proportions preview and such).
+    pub fn computed_trackers(&self) -> &[Tracker] {
+        &self.synthetic
     }
 
     pub fn device_of(&self, key: TrackerKey) -> Option<&Device> {
@@ -287,6 +307,33 @@ impl SlimeVrApp {
     }
 
     // -- events ------------------------------------------------------------
+
+    /// Fold finished downloads into the server panel: re-detect the paths so a
+    /// freshly downloaded jar/JRE is used without restarting the app.
+    fn poll_downloads(&mut self) {
+        for (kind, phase) in self.downloads.poll() {
+            match phase {
+                crate::download::Phase::Done(path) => {
+                    let dir = self.config.server_dir.clone();
+                    let java = self.config.java_path.clone();
+                    self.server.detect(dir.as_deref(), java.as_deref());
+                    let note = if self.server.is_running() {
+                        "（次回サーバー起動時に反映されます）"
+                    } else {
+                        ""
+                    };
+                    self.toast(
+                        Severity::Info,
+                        format!("{} を取得しました: {}{note}", kind.label(), path.display()),
+                    );
+                }
+                crate::download::Phase::Failed(error) => {
+                    self.toast(Severity::Error, format!("{}: {error}", kind.label()));
+                }
+                _ => {}
+            }
+        }
+    }
 
     fn apply_events(&mut self, events: Vec<ServerEvent>) {
         for event in events {
@@ -513,8 +560,8 @@ fn chrono_like_stamp() -> String {
 }
 
 impl eframe::App for SlimeVrApp {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let ctx = ui.ctx().clone();
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let ctx = ctx.clone();
         let now = Instant::now();
         self.frame_times
             .retain(|time| now.duration_since(*time) < Duration::from_secs(2));
@@ -528,6 +575,7 @@ impl eframe::App for SlimeVrApp {
         self.apply_events(events);
         self.toasts
             .retain(|toast| toast.created.elapsed() < Duration::from_secs(6));
+        self.poll_downloads();
 
         // Re-request settings once in a while so a GUI started before the server
         // still converges without the user touching anything.
@@ -537,14 +585,14 @@ impl eframe::App for SlimeVrApp {
             self.request_settings();
         }
 
-        egui::Panel::top("header").show(ui, |ui| ui::header(self, ui));
-        egui::Panel::left("nav")
+        egui::TopBottomPanel::top("header").show(&ctx, |ui| ui::header(self, ui));
+        egui::SidePanel::left("nav")
             .resizable(false)
-            .exact_size(168.0)
-            .show(ui, |ui| ui::nav(self, ui));
-        egui::Panel::bottom("footer").show(ui, |ui| ui::footer(self, ui));
+            .exact_width(224.0)
+            .show(&ctx, |ui| ui::nav(self, ui));
+        egui::TopBottomPanel::bottom("footer").show(&ctx, |ui| ui::footer(self, ui));
 
-        egui::CentralPanel::default().show(ui, |ui| match self.page {
+        egui::CentralPanel::default().show(&ctx, |ui| match self.page {
             Page::Dashboard => ui::dashboard::show(self, ui),
             Page::Trackers => ui::trackers::show(self, ui),
             Page::Reset => ui::reset::show(self, ui),
@@ -558,6 +606,10 @@ impl eframe::App for SlimeVrApp {
         if self.ui_scale != previous_scale {
             self.config.ui_scale = self.ui_scale;
             self.save_config();
+        }
+
+        if self.downloads.any_running() {
+            ctx.request_repaint();
         }
 
         if self.smoke_test {

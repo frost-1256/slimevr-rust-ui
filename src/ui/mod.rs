@@ -21,35 +21,30 @@ pub const CARD_MIN_WIDTH: f32 = 380.0;
 pub fn header(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.label(
-            RichText::new("SlimeVR Native")
+            RichText::new("SlimeVR")
                 .color(theme::ACCENT)
                 .strong()
-                .size(18.0),
+                .size(20.0),
         );
-        ui.separator();
+        ui.label(RichText::new("Native UI").color(theme::MUTED).size(13.0));
+        ui.add_space(8.0);
 
         let (text, color) = match app.conn.state() {
             ConnState::Connected => ("接続済み", theme::OK),
             ConnState::Connecting => ("接続中…", theme::WARN),
             ConnState::Disconnected => ("未接続", theme::ERROR),
         };
-        ui.label(RichText::new("●").color(color));
-        ui.label(text);
-        if let Some(error) = &app.conn.last_error {
-            ui.label(RichText::new(error).color(theme::ERROR).small());
-        }
-        ui.label(RichText::new(app.conn.url()).color(theme::MUTED).small());
-        ui.label(RichText::new(app.page.label()).color(theme::ACCENT).small());
+        status_badge(ui, text, color);
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui
-                .button("ヘルプ")
+                .add(theme::text_button("ヘルプ"))
                 .on_hover_text("キー操作と既知の制限")
                 .clicked()
             {
                 app.show_help = !app.show_help;
             }
-            if ui.button("再接続").clicked() {
+            if ui.add(theme::outlined_button("再接続")).clicked() {
                 app.conn.reconnect();
             }
             let (label, next) = if app.paused {
@@ -57,8 +52,13 @@ pub fn header(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
             } else {
                 ("トラッキング一時停止", true)
             };
+            let button = if app.paused {
+                theme::primary_button(label)
+            } else {
+                theme::outlined_button(label)
+            };
             if ui
-                .button(label)
+                .add(button)
                 .on_hover_text("サーバー全体のトラッキングを一時停止します")
                 .clicked()
             {
@@ -67,25 +67,51 @@ pub fn header(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
         });
     });
 
+    // Second line keeps the (often long) target URL and the last socket error
+    // out of the action row, where they used to overlap the buttons.
+    if app.conn.state() != ConnState::Connected || app.conn.last_error.is_some() {
+        ui.horizontal(|ui| {
+            ui.add_space(2.0);
+            ui.label(
+                RichText::new(app.conn.url())
+                    .color(theme::MUTED)
+                    .small()
+                    .monospace(),
+            );
+            if let Some(error) = &app.conn.last_error {
+                ui.add(
+                    egui::Label::new(RichText::new(error).color(theme::ERROR).small()).truncate(),
+                );
+            }
+        });
+    }
+
     if !app.toasts.is_empty() {
         ui.add_space(2.0);
         let mut dismiss = None;
         ui.horizontal_wrapped(|ui| {
             for (index, toast) in app.toasts.iter().enumerate() {
                 let color = match toast.severity {
-                    Severity::Info => theme::MUTED,
+                    Severity::Info => theme::TEXT,
                     Severity::Success => theme::OK,
                     Severity::Warning => theme::WARN,
                     Severity::Error => theme::ERROR,
                 };
-                if ui
-                    .label(RichText::new(&toast.text).color(color).small())
+                let response = egui::Frame::new()
+                    .fill(theme::TOAST_INFO)
+                    .corner_radius(egui::CornerRadius::same(8))
+                    .inner_margin(egui::Margin::symmetric(10, 6))
+                    .show(ui, |ui| {
+                        ui.label(RichText::new(&toast.text).color(color).small());
+                    })
+                    .response;
+                if response
+                    .interact(egui::Sense::click())
                     .on_hover_text("クリックで閉じる")
                     .clicked()
                 {
                     dismiss = Some(index);
                 }
-                ui.label(RichText::new("|").color(theme::BORDER).small());
             }
         });
         if let Some(index) = dismiss {
@@ -108,35 +134,42 @@ pub fn header(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
     }
 }
 
+/// Small pill used for connection/severity state in the header.
+pub fn status_badge(ui: &mut egui::Ui, text: &str, color: egui::Color32) {
+    let font = egui::FontId::proportional(13.0);
+    let galley = ui.painter().layout_no_wrap(text.to_owned(), font, color);
+    let size = galley.size() + egui::vec2(20.0, 8.0);
+    let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+    ui.painter()
+        .rect_filled(rect, size.y / 2.0, color.gamma_multiply(0.16));
+    ui.painter()
+        .galley(rect.min + egui::vec2(10.0, 4.0), galley, color);
+}
+
 pub fn nav(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
-    ui.add_space(6.0);
+    ui.add_space(4.0);
+    ui.horizontal(|ui| {
+        ui.add_space(8.0);
+        ui.label(
+            RichText::new("ナビゲーション")
+                .color(theme::MUTED)
+                .size(12.0),
+        );
+    });
+    ui.add_space(2.0);
+
     for (page, label) in crate::app::Page::ALL {
         let selected = app.page == page;
-        let mut text = RichText::new(label);
-        if selected {
-            text = text.color(theme::ACCENT).strong();
-        }
-        let mut button = egui::Button::new(text).min_size(egui::vec2(150.0, 30.0));
-        if selected {
-            button = button.fill(theme::SURFACE_ALT);
-        }
-        if ui.add(button).clicked() {
+        let badge = (page == crate::app::Page::Checklist)
+            .then(|| app.checklist.remaining())
+            .filter(|remaining| *remaining > 0);
+        if nav_item(ui, page.icon(), label, selected, badge) {
             app.page = page;
-        }
-        if page == crate::app::Page::Checklist {
-            let remaining = app.checklist.remaining();
-            if remaining > 0 {
-                ui.label(
-                    RichText::new(format!("  {remaining} 件未完了"))
-                        .color(theme::WARN)
-                        .small(),
-                );
-            }
         }
     }
 
     ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-        ui.add_space(6.0);
+        ui.add_space(8.0);
         ui.label(
             RichText::new(format!("UI スケール {:.2}x", app.ui_scale))
                 .color(theme::MUTED)
@@ -144,6 +177,68 @@ pub fn nav(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
         );
         ui.add(egui::Slider::new(&mut app.ui_scale, 0.75..=2.0).show_value(false));
     });
+}
+
+/// One Material 3 navigation-drawer row: pill highlight, leading icon, label.
+fn nav_item(
+    ui: &mut egui::Ui,
+    icon: &str,
+    label: &str,
+    selected: bool,
+    badge: Option<usize>,
+) -> bool {
+    let height = 46.0;
+    let (rect, response) = ui.allocate_exact_size(
+        egui::vec2(ui.available_width(), height),
+        egui::Sense::click(),
+    );
+    if !ui.is_rect_visible(rect) {
+        return false;
+    }
+
+    let bg = if selected {
+        theme::ACCENT_DIM
+    } else if response.hovered() {
+        theme::SURFACE_ALT
+    } else {
+        egui::Color32::TRANSPARENT
+    };
+    if bg != egui::Color32::TRANSPARENT {
+        ui.painter().rect_filled(rect, 23.0, bg);
+    }
+    let fg = if selected { theme::TEXT } else { theme::MUTED };
+
+    let painter = ui.painter();
+    if let Some(glyph) = egui_material3::material_symbol::get_material_symbol(icon) {
+        painter.text(
+            rect.left_center() + egui::vec2(22.0, 0.0),
+            egui::Align2::CENTER_CENTER,
+            glyph,
+            egui::FontId::proportional(22.0),
+            if selected { theme::ACCENT } else { fg },
+        );
+    }
+    painter.text(
+        rect.left_center() + egui::vec2(44.0, 0.0),
+        egui::Align2::LEFT_CENTER,
+        label,
+        egui::FontId::proportional(15.0),
+        if selected { theme::ACCENT } else { theme::TEXT },
+    );
+    if let Some(remaining) = badge {
+        painter.text(
+            rect.right_center() - egui::vec2(16.0, 0.0),
+            egui::Align2::RIGHT_CENTER,
+            remaining.to_string(),
+            egui::FontId::proportional(13.0),
+            theme::WARN,
+        );
+    }
+
+    if response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    response.clicked()
 }
 
 pub fn footer(app: &mut SlimeVrApp, ui: &mut egui::Ui) {
