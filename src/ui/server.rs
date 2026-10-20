@@ -322,6 +322,10 @@ fn process_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
                 .small()
                 .color(theme::MUTED),
         );
+        ui.hyperlink_to(
+            RichText::new("計測データ (ライブ記録 / ドリフト解析用)").small(),
+            "http://127.0.0.1:21111/",
+        );
 
         ui.horizontal(|ui| {
             ui.label("サーバーディレクトリ");
