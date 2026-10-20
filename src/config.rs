@@ -39,7 +39,7 @@ impl Default for LocalConfig {
             server_url: DEFAULT_URL.to_string(),
             server_dir: None,
             java_path: None,
-            autostart_server: false,
+            autostart_server: true,
             include_bones: true,
             warn_vrc_settings: true,
             muted_warnings: Vec::new(),

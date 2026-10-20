@@ -202,7 +202,24 @@ impl SlimeVrApp {
             last_settings_request: Instant::now(),
         };
         app.conn.include_bones = app.config.include_bones;
+        if app.config.autostart_server && !smoke_test {
+            app.autostart_server();
+        }
         app
+    }
+
+    /// Launch the bundled/installed server once at startup, unless something
+    /// already serves the port or the jar/runtime is missing.
+    fn autostart_server(&mut self) {
+        if self.server.jar.is_none() || self.server.java.is_none() {
+            log::info!("自動起動: jar または Java が見つからないためスキップします");
+            return;
+        }
+        if !port_is_free(21110) {
+            log::info!("自動起動: ポート 21110 は既に使用中です。既存のサーバーに接続します");
+            return;
+        }
+        self.start_server();
     }
 
     // -- helpers -----------------------------------------------------------

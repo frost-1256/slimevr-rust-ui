@@ -40,6 +40,11 @@ JVM is spawned with `CREATE_NO_WINDOW`, so no console window appears. A panic
 writes a backtrace to `<data dir>/slimevr-native-ui/crash.log` in addition to
 stderr.
 
+The server also starts automatically when the UI launches (toggle
+「起動時にサーバーを自動起動」 on the server page). It is skipped when the
+jar/Java is missing or port 21110 is already taken, so an external server is
+attached instead of fought over. Autostart is disabled during `--smoke-test`.
+
 ## Run
 
 ```sh

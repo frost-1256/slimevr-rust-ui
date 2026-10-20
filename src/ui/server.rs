@@ -308,6 +308,14 @@ fn process_card(ui: &mut egui::Ui, app: &mut SlimeVrApp) {
         });
 
         ui.add_space(6.0);
+        let mut autostart = app.config.autostart_server;
+        let response = ui.checkbox(&mut autostart, "起動時にサーバーを自動起動");
+        if response.changed() {
+            app.config.autostart_server = autostart;
+            app.save_config();
+        }
+
+        ui.add_space(6.0);
         ui.horizontal(|ui| {
             ui::server_controls(ui, app);
             if ui.add(theme::text_button("設定ファイルを開く")).clicked()
