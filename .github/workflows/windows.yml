@@ -78,6 +78,13 @@ jobs:
           ref: 64b9dba4502b5b30183ac3678fd81e8050a6399f
           path: server-src
 
+      # :solarxr-protocol has no variants without its sources, so shadowJar
+      # fails with "No matching variant" unless the submodule is present.
+      # Only this submodule is needed; openvr is fetched when bindings build.
+      - name: Fetch solarxr-protocol submodule
+        working-directory: server-src
+        run: git submodule update --init solarxr-protocol
+
       - name: Install JDK 17
         uses: actions/setup-java@v4
         with:
