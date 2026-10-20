@@ -26,13 +26,26 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Format
-        run: cargo fmt -- --check
+        run: cargo fmt --package slimevr-native-ui -- --check
 
       - name: Clippy
         run: cargo clippy --all-targets --locked -- -D warnings
 
       - name: Test
         run: cargo test --locked
+
+      - name: Build (for smoke test)
+        run: cargo build --locked
+
+      # The runner has no GPU: llvmpipe under Xvfb is the only way to get a
+      # GL 2.0+ context, and it exercises every page via --smoke-test.
+      - name: Smoke test (Xvfb)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgl1-mesa-dri libxkbcommon-x11-0
+          xvfb-run -a -s "-screen 0 1400x950x24" \
+            env LIBGL_ALWAYS_SOFTWARE=1 RUST_LOG=info \
+            ./target/debug/slimevr-native-ui --smoke-test
 
   windows:
     name: Windows x64 build
@@ -53,23 +66,9 @@ jobs:
       - name: Build
         run: cargo build --release --locked
 
-      - name: Smoke test (headless, 5 s)
-        shell: pwsh
-        run: |
-          $env:RUST_LOG = "debug"
-          $env:RUST_BACKTRACE = "1"
-          $exe = "target\release\slimevr-native-ui.exe"
-          $process = Start-Process -FilePath $exe -ArgumentList "--smoke-test" `
-            -RedirectStandardOutput smoke.out -RedirectStandardError smoke.err -PassThru
-          if (-not $process.WaitForExit(30000)) {
-            Stop-Process -Id $process.Id -Force
-            throw "smoke test timed out"
-          }
-          Get-Content smoke.out -ErrorAction SilentlyContinue
-          Get-Content smoke.err -ErrorAction SilentlyContinue
-          if ($process.ExitCode -ne 0) {
-            throw "smoke test exited with $($process.ExitCode)"
-          }
+      # No GUI smoke test here: the hosted runner exposes only OpenGL 1.1
+      # (GDI), and egui_glow needs 2.0+. Startup is covered by the Linux
+      # Xvfb job, which runs the same binary code path via llvmpipe.
 
       - name: Upload executable
         uses: actions/upload-artifact@v4

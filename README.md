@@ -47,8 +47,8 @@ cargo run -- --smoke-test
 
 ## Windows build
 
-GitHub Actions (`windows-latest`) runs the test suite, builds
-`target/release/slimevr-native-ui.exe`, smoke-tests it, and uploads
+GitHub Actions runs the test suite and an Xvfb smoke test on Linux, builds
+`target/release/slimevr-native-ui.exe`, and uploads
 `slimevr-native-ui-win64`.
 
 ## Tests
